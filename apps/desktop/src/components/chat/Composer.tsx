@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BotConfig } from "@ml-aos/shared";
+import { IconAt, IconSend } from "../shell/icons";
 
 type ComposerProps = {
   bots: BotConfig[];
@@ -16,7 +17,6 @@ export function Composer({
   sending,
   onSend,
   onAbort,
-  onDispatch,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [mentionBotId, setMentionBotId] = useState<string | undefined>();
@@ -86,94 +86,98 @@ export function Composer({
 
   return (
     <footer className="composer">
-      {mentioned ? (
-        <div className="mention-chip-row">
-          <span className="mention-chip">
-            @{mentioned.name}
+      <div className="composer-box">
+        {mentioned ? (
+          <div className="mention-chip-row">
+            <span className="mention-chip">
+              @{mentioned.name}
+              <button
+                type="button"
+                className="chip-clear"
+                aria-label="清除提及"
+                onClick={() => setMentionBotId(undefined)}
+              >
+                ×
+              </button>
+            </span>
+          </div>
+        ) : null}
+
+        {pickerOpen ? (
+          <ul className="mention-picker" role="listbox" aria-label="提及智能体">
+            {filtered.length === 0 ? (
+              <li className="muted">暂无已启用的智能体</li>
+            ) : (
+              filtered.map((bot) => (
+                <li key={bot.id}>
+                  <button type="button" onClick={() => pickBot(bot)}>
+                    <strong>@{bot.name}</strong>
+                    <span className="muted">{bot.role}</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
+
+        <textarea
+          ref={textareaRef}
+          rows={3}
+          placeholder="向智能体发消息，输入 @ 可提及…"
+          aria-label="输入框"
+          value={text}
+          disabled={disabled}
+          onChange={(e) => handleChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              handleSend();
+            }
+            if (e.key === "@" && !pickerOpen) {
+              openPicker(true);
+            }
+            if (e.key === "Escape") {
+              setPickerOpen(false);
+            }
+          }}
+        />
+        <div className="composer-actions">
+          <div className="composer-tools">
             <button
               type="button"
-              className="chip-clear"
-              aria-label="Clear mention"
-              onClick={() => setMentionBotId(undefined)}
+              className="icon-btn"
+              disabled={disabled}
+              onClick={() => openPicker(false)}
+              aria-label="提及智能体"
+              title="提及"
             >
-              ×
+              <IconAt />
             </button>
-          </span>
+          </div>
+          <div className="composer-send-row">
+            <button
+              type="button"
+              className="btn-abort"
+              disabled={disabled}
+              onClick={onAbort}
+            >
+              全部中止
+            </button>
+            <button
+              type="button"
+              className="btn-primary btn-send"
+              disabled={disabled || sending || !text.trim()}
+              onClick={handleSend}
+            >
+              {sending ? "发送中…" : "发送"}
+              <IconSend />
+            </button>
+          </div>
         </div>
-      ) : null}
-
-      {pickerOpen ? (
-        <ul className="mention-picker" role="listbox" aria-label="Mention bot">
-          {filtered.length === 0 ? (
-            <li className="muted">No enabled bots</li>
-          ) : (
-            filtered.map((bot) => (
-              <li key={bot.id}>
-                <button type="button" onClick={() => pickBot(bot)}>
-                  <strong>@{bot.name}</strong>
-                  <span className="muted">{bot.role}</span>
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      ) : null}
-
-      <textarea
-        ref={textareaRef}
-        rows={3}
-        placeholder="Message agents… use @ to mention"
-        aria-label="Composer"
-        value={text}
-        disabled={disabled}
-        onChange={(e) => handleChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            handleSend();
-          }
-          if (e.key === "@" && !pickerOpen) {
-            openPicker(true);
-          }
-          if (e.key === "Escape") {
-            setPickerOpen(false);
-          }
-        }}
-      />
-      <div className="composer-actions">
-        <button
-          type="button"
-          className="btn-ghost"
-          disabled={disabled}
-          onClick={() => openPicker(false)}
-        >
-          @
-        </button>
-        <button
-          type="button"
-          className="btn-ghost"
-          disabled={disabled}
-          onClick={onDispatch}
-        >
-          Dispatch
-        </button>
-        <button
-          type="button"
-          className="btn-ghost"
-          disabled={disabled}
-          onClick={onAbort}
-        >
-          Abort
-        </button>
-        <button
-          type="button"
-          className="btn-primary"
-          disabled={disabled || sending || !text.trim()}
-          onClick={handleSend}
-        >
-          {sending ? "Sending…" : "Send"}
-        </button>
       </div>
+      <p className="composer-hint">
+        Ctrl / ⌘ + Enter 发送 · 智能体执行可能需要几分钟
+      </p>
     </footer>
   );
 }

@@ -44,7 +44,7 @@ export function BotSettingsPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setStatus(err instanceof Error ? err.message : "Failed to load bots");
+          setStatus(err instanceof Error ? err.message : "加载智能体失败");
         }
       });
     return () => {
@@ -89,9 +89,9 @@ export function BotSettingsPage() {
       const list = await refresh();
       const next = list.find((b) => b.id === bot.id) ?? bot;
       selectBot(next);
-      setStatus("Saved");
+      setStatus("已保存");
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : "Save failed");
+      setStatus(err instanceof Error ? err.message : "保存失败");
     } finally {
       setBusy(false);
     }
@@ -99,7 +99,7 @@ export function BotSettingsPage() {
 
   async function handleDelete() {
     if (!selectedId || selectedId === "new") return;
-    if (!window.confirm("Delete this bot?")) return;
+    if (!window.confirm("确定删除该智能体？")) return;
     setBusy(true);
     setStatus(null);
     try {
@@ -110,9 +110,9 @@ export function BotSettingsPage() {
       } else {
         startCreate();
       }
-      setStatus("Deleted");
+      setStatus("已删除");
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : "Delete failed");
+      setStatus(err instanceof Error ? err.message : "删除失败");
     } finally {
       setBusy(false);
     }
@@ -122,18 +122,16 @@ export function BotSettingsPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="muted">Bots</p>
-          <h1>Agent Configuration</h1>
-          <p className="page-lead">
-            Define roles, engines, and instructions for each bot.
-          </p>
+          <p className="muted">智能体</p>
+          <h1>智能体配置</h1>
+          <p className="page-lead">为每个智能体定义角色、引擎与指令。</p>
         </div>
         <div className="form-actions">
           <button type="button" className="btn-primary" onClick={startCreate}>
-            Add bot
+            + 新增智能体配置
           </button>
           <Link className="btn-ghost" to="/">
-            Back home
+            返回工作台
           </Link>
         </div>
       </header>
@@ -150,19 +148,19 @@ export function BotSettingsPage() {
                 <strong>{bot.name}</strong>
                 <span className="muted">
                   {bot.role} · {bot.defaultEngine}
-                  {!bot.enabled ? " · off" : ""}
+                  {!bot.enabled ? " · 已关闭" : ""}
                 </span>
               </button>
             </li>
           ))}
           {bots.length === 0 ? (
-            <li className="muted empty-hint">No bots yet</li>
+            <li className="muted empty-hint">暂无智能体</li>
           ) : null}
         </ul>
 
         <form className="panel-form" onSubmit={handleSave}>
           <label className="field">
-            <span>Bot Name</span>
+            <span>名称</span>
             <input
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -170,16 +168,21 @@ export function BotSettingsPage() {
             />
           </label>
           <label className="field">
-            <span>Role</span>
+            <span>角色</span>
             <input
               value={draft.role}
               onChange={(e) => setDraft({ ...draft, role: e.target.value })}
-              placeholder="e.g. CEO, Developer"
+              placeholder="例如：developer、tester、reviewer"
               required
             />
+            <span className="field-hint muted">
+              真实流水线按角色匹配阶段负责人：
+              <code>developer</code>（开发）/ <code>tester</code>（测试）/{" "}
+              <code>reviewer</code>（审查）。请各配置至少一名已启用的同名角色智能体。
+            </span>
           </label>
           <label className="field">
-            <span>Default Engine</span>
+            <span>默认引擎</span>
             <select
               value={draft.defaultEngine}
               onChange={(e) =>
@@ -197,14 +200,14 @@ export function BotSettingsPage() {
             </select>
           </label>
           <label className="field">
-            <span>System Instructions</span>
+            <span>系统指令</span>
             <textarea
               rows={8}
               value={draft.instructions}
               onChange={(e) =>
                 setDraft({ ...draft, instructions: e.target.value })
               }
-              placeholder="Role prompt and operating rules…"
+              placeholder="角色提示词与行为约束…"
             />
           </label>
           <label className="field checkbox-field">
@@ -215,7 +218,7 @@ export function BotSettingsPage() {
                 setDraft({ ...draft, enabled: e.target.checked })
               }
             />
-            <span>Enabled</span>
+            <span>已启用</span>
           </label>
 
           {status ? <p className="form-status">{status}</p> : null}
@@ -228,11 +231,11 @@ export function BotSettingsPage() {
                 disabled={busy}
                 onClick={handleDelete}
               >
-                Delete
+                删除智能体
               </button>
             ) : null}
             <button type="submit" className="btn-primary" disabled={busy}>
-              {busy ? "Saving…" : "Save"}
+              {busy ? "保存中…" : "保存更改"}
             </button>
           </div>
         </form>

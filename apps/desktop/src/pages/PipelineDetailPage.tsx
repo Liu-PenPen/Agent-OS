@@ -1,15 +1,36 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { PipelineTask } from "@ml-aos/shared";
+import type { BotConfig, PipelineTask } from "@ml-aos/shared";
 import { api } from "../lib/api";
 
+const STAGE_LABEL: Record<string, string> = {
+  idle: "空闲",
+  developing: "开发中",
+  testing: "测试中",
+  reviewing: "审查中",
+  completed: "已完成",
+  blocked: "已阻塞",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "待开始",
+  running: "进行中",
+  done: "已完成",
+  failed: "失败",
+};
+
 function stageLabel(stage: string): string {
-  return stage.charAt(0).toUpperCase() + stage.slice(1);
+  return STAGE_LABEL[stage] ?? stage;
+}
+
+function statusLabel(status: string): string {
+  return STATUS_LABEL[status] ?? status;
 }
 
 export function PipelineDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [task, setTask] = useState<PipelineTask | null>(null);
+  const [bots, setBots] = useState<BotConfig[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -17,21 +38,28 @@ export function PipelineDetailPage() {
     if (!id) return;
     let cancelled = false;
     setStatus(null);
-    api
-      .getPipeline(id)
-      .then((t) => {
-        if (!cancelled) setTask(t);
+    Promise.all([api.getPipeline(id), api.listBots()])
+      .then(([t, botList]) => {
+        if (!cancelled) {
+          setTask(t);
+          setBots(botList);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setTask(null);
-          setStatus(err instanceof Error ? err.message : "Failed to load");
+          setStatus(err instanceof Error ? err.message : "加载失败");
         }
       });
     return () => {
       cancelled = true;
     };
   }, [id]);
+
+  function botName(botId: string | undefined): string | undefined {
+    if (!botId) return undefined;
+    return bots.find((b) => b.id === botId)?.name ?? botId;
+  }
 
   async function handleAdvance() {
     if (!id) return;
@@ -40,9 +68,9 @@ export function PipelineDetailPage() {
     try {
       const next = await api.advancePipeline(id);
       setTask(next);
-      setStatus("Advanced");
+      setStatus("已推进");
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : "Advance failed");
+      setStatus(err instanceof Error ? err.message : "推进失败");
     } finally {
       setBusy(false);
     }
@@ -52,10 +80,10 @@ export function PipelineDetailPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="muted">Pipeline</p>
-          <h1>{task?.title ?? "Pipeline detail"}</h1>
+          <p className="muted">流水线</p>
+          <h1>{task?.title ?? "流水线详情"}</h1>
           <p className="page-lead mono">
-            {id ? `ID: ${id}` : "Missing pipeline id"}
+            {id ? `ID: ${id}` : "缺少流水线 ID"}
             {task ? ` · ${stageLabel(task.stage)}` : ""}
           </p>
         </div>
@@ -66,37 +94,47 @@ export function PipelineDetailPage() {
             disabled={busy || !task || task.stage === "completed"}
             onClick={handleAdvance}
           >
-            Advance
+            推进阶段
           </button>
           <Link className="btn-ghost" to="/">
-            Back home
+            返回首页
           </Link>
         </div>
       </header>
 
       {task ? (
         <ol className="pipeline-detail-list">
-          {task.stages.map((step) => (
-            <li
-              key={step.stage}
-              className={`pipeline-detail-step status-${step.status} ${
-                step.stage === task.stage ? "current" : ""
-              }`}
-            >
-              <div className="pipeline-detail-head">
-                <strong>{stageLabel(step.stage)}</strong>
-                <span className="status-chip">{step.status}</span>
-              </div>
-              {step.detail ? <p>{step.detail}</p> : null}
-              {step.at ? (
-                <p className="muted mono">{new Date(step.at).toLocaleString()}</p>
-              ) : null}
-            </li>
-          ))}
+          {task.stages.map((step) => {
+            const assignee = botName(step.botId);
+            return (
+              <li
+                key={step.stage}
+                className={`pipeline-detail-step status-${step.status} ${
+                  step.stage === task.stage ? "current" : ""
+                }`}
+              >
+                <div className="pipeline-detail-head">
+                  <strong>{stageLabel(step.stage)}</strong>
+                  <span className="status-chip">{statusLabel(step.status)}</span>
+                </div>
+                {assignee ? <p className="muted">负责人：{assignee}</p> : null}
+                {step.detail ? (
+                  <p className="pipeline-stage-detail">{step.detail}</p>
+                ) : (
+                  <p className="muted">暂无阶段详情</p>
+                )}
+                {step.at ? (
+                  <p className="muted mono">
+                    {new Date(step.at).toLocaleString("zh-CN")}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
         </ol>
       ) : (
         <p className="muted">
-          {status ?? "No pipeline loaded. Dispatch from a topic first."}
+          {status ?? "尚未加载流水线。请先从话题启动流水线。"}
         </p>
       )}
 

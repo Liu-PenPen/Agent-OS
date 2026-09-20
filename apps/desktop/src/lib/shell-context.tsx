@@ -176,7 +176,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
       await refreshPending();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load shell");
+      setError(err instanceof Error ? err.message : "加载工作台失败");
     }
   }, [
     workspaceId,
@@ -210,7 +210,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         await loadPipeline(topic);
       } catch (err: unknown) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load topic");
+          setError(err instanceof Error ? err.message : "加载话题失败");
         }
       }
     })();
@@ -263,21 +263,21 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const createTopic = useCallback(
     async (title?: string) => {
       if (!workspaceId) {
-        setError("Create a workspace first");
+        setError("请先创建工作区");
         return null;
       }
       setError(null);
       try {
         const topic = await api.createTopic({
           workspaceId,
-          title: title?.trim() || "New topic",
+          title: title?.trim() || "新话题",
         });
         const list = await refreshTopics(workspaceId);
         setSelectedTopicId(topic.id);
         setTopics(list.some((t) => t.id === topic.id) ? list : [topic, ...list]);
         return topic;
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Create topic failed");
+        setError(err instanceof Error ? err.message : "创建话题失败");
         return null;
       }
     },
@@ -300,7 +300,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         const topic = list.find((t) => t.id === selectedTopicId) ?? null;
         await loadPipeline(topic);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Send failed");
+        setError(err instanceof Error ? err.message : "发送失败");
       } finally {
         setSending(false);
       }
@@ -314,7 +314,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     try {
       await api.abortTopic(selectedTopicId);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Abort failed");
+      setError(err instanceof Error ? err.message : "中止失败");
     }
   }, [selectedTopicId]);
 
@@ -324,13 +324,13 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       setError(null);
       try {
         const task = await api.dispatchTopic(selectedTopicId, {
-          title: title?.trim() || selectedTopic?.title || "Pipeline task",
+          title: title?.trim() || selectedTopic?.title || "流水线任务",
           assigneeBotIds: enabledBots.slice(0, 4).map((b) => b.id),
         });
         setPipeline(task);
         await refreshTopics();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Dispatch failed");
+        setError(err instanceof Error ? err.message : "启动流水线失败");
       }
     },
     [selectedTopicId, selectedTopic, enabledBots, refreshTopics],
@@ -344,7 +344,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         upsertMessage(updated);
         await refreshPending();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Answer failed");
+        setError(err instanceof Error ? err.message : "答复失败");
       }
     },
     [upsertMessage, refreshPending],

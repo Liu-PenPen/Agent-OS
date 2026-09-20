@@ -61,6 +61,31 @@ Set the default under App Settings, or per-bot on the Bot settings page.
 
 Configure `gitUrl` on a workspace, then Clone. Requires `git` on `PATH`. Integration tests skip when Git is unavailable; see `packages/runtime/README.md`.
 
+## 真实流水线
+
+Dispatch 后默认由 `PipelineRunner` 按阶段真正跑各 Bot 的 CLI（mock / claude），阶段成功再推进；失败标为 `blocked`。不再依赖 5 秒假定时器（仅当 `ML_AOS_MOCK_PIPELINE_TIMER=1` 时恢复旧行为）。
+
+### 配置三个角色 Bot
+
+在 **智能体配置** 页创建并启用三个 Bot，`role` 必须精确匹配（大小写不敏感）：
+
+| 阶段 | `role` | 说明 |
+|------|--------|------|
+| developing | `developer` | 实现变更 |
+| testing | `tester` | 测试验证 |
+| reviewing | `reviewer` | 审查 / PR |
+
+引擎可先全部设为 `mock`（无需本机 Claude）；需要真 CLI 时把对应 Bot 的 `defaultEngine` 改为 `claude`。
+
+也可在 Dispatch API 里传 `assigneeBotIds: [devId, testId, reviewId]` 覆盖角色自动匹配。
+
+### 启动与观察
+
+1. 选中工作区话题 → 右侧「启动流水线」（或 `POST /api/topics/:id/dispatch`）
+2. 右侧面板显示当前阶段负责人 Bot 名；`blocked` 时出现 **Blocked** 徽章
+3. 流水线详情页展示各阶段 `detail`（CLI 摘要 / 失败原因）
+4. 阶段中出现澄清 → 停在当前阶段，回答后继续；Abort → 当前阶段失败并 `blocked`
+
 ## Tests
 
 ```bash

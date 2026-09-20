@@ -1,6 +1,7 @@
 import { MessageList } from "../components/chat/MessageList";
 import { Composer } from "../components/chat/Composer";
 import { useShell } from "../lib/shell-context";
+import { botInitial, botTone } from "../lib/bot-style";
 
 export function HomePage() {
   const {
@@ -21,10 +22,10 @@ export function HomePage() {
     return (
       <div className="home-center">
         <header className="topic-header">
-          <h1>No workspace</h1>
-          <p className="muted">
-            Create a workspace from the sidebar to start chatting.
-          </p>
+          <div>
+            <h1>暂无工作区</h1>
+            <p className="muted">请从侧边栏新建工作区后再开始对话。</p>
+          </div>
         </header>
       </div>
     );
@@ -34,21 +35,51 @@ export function HomePage() {
     return (
       <div className="home-center">
         <header className="topic-header">
-          <h1>{workspace.name}</h1>
-          <p className="muted">Create a topic in the sidebar to begin.</p>
+          <div>
+            <h1>{workspace.name}</h1>
+            <p className="muted">在侧边栏新建话题后即可开始。</p>
+          </div>
         </header>
       </div>
     );
   }
 
+  const agents = enabledBots.length > 0 ? enabledBots : bots;
+
   return (
     <div className="home-center">
       <header className="topic-header">
-        <h1>{selectedTopic.title}</h1>
-        <p className="muted">
-          {workspace.name} · {selectedTopic.pipelineStage}
-          {error ? ` · ${error}` : ""}
-        </p>
+        <div className="topic-header-left">
+          <h1>{selectedTopic.title}</h1>
+          <div className="topic-agent-stack" aria-label="智能体">
+            {agents.slice(0, 4).map((bot) => (
+              <span
+                key={bot.id}
+                className={`agent-avatar tone-${botTone(bot)}`}
+                title={bot.name}
+              >
+                {botInitial(bot)}
+              </span>
+            ))}
+          </div>
+          {error ? <span className="topic-error">{error}</span> : null}
+        </div>
+        <div className="topic-header-actions">
+          <button
+            type="button"
+            className="btn-ghost abort-btn"
+            onClick={() => void abortTopic()}
+          >
+            中止进程
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => void dispatchTopic(selectedTopic.title)}
+          >
+            启动流水线
+          </button>
+        </div>
       </header>
       <MessageList
         messages={messages}

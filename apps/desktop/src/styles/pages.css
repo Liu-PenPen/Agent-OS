@@ -1,7 +1,8 @@
 .page {
-  padding: 20px 24px 32px;
+  padding: 24px 28px 40px;
   overflow: auto;
   height: 100%;
+  background: var(--bg-app);
 }
 
 .page-header {
@@ -9,13 +10,14 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .page-header h1 {
   margin: 4px 0;
   font-size: 22px;
   font-weight: 650;
+  letter-spacing: -0.02em;
 }
 
 .page-lead {
@@ -28,13 +30,13 @@
 
 .panel-form {
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 12px;
   background: var(--bg-pane);
-  padding: 16px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-width: 720px;
+  max-width: 760px;
 }
 
 .page > .panel-form + .panel-form {
@@ -78,6 +80,18 @@
 
 .field-row input {
   flex: 1;
+}
+
+.field-hint {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.field-hint code {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
 }
 
 .field-hint {
@@ -128,9 +142,9 @@
   width: 100%;
   text-align: left;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 10px;
   background: var(--bg-elevated);
-  padding: 10px 12px;
+  padding: 12px 14px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -139,7 +153,8 @@
 
 .entity-row.active {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .empty-hint {
@@ -191,10 +206,30 @@
   background: var(--bg-elevated);
   padding: 12px 14px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .option-card:hover:not(:disabled) {
   border-color: var(--accent);
+}
+
+.option-card.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+}
+
+.queue-detail {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+}
+
+.queue-detail .clarification-head {
+  margin-bottom: 4px;
+}
+
+.queue-detail .section-title {
+  color: var(--warning);
 }
 
 .queue-prompt {
@@ -237,6 +272,11 @@
   gap: 8px;
 }
 
+.pipeline-stage-detail {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .btn-ghost.danger {
   color: var(--danger);
   border-color: var(--danger);
@@ -263,32 +303,34 @@
   background: var(--bg-elevated);
 }
 
-.nav-btn {
-  display: inline-flex;
+.settings-row {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  color: #fff;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.right-panel h2 a,
-.linkish {
-  color: inherit;
-  text-decoration: none;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
+.settings-row.checkbox-field {
+  align-items: center;
 }
 
-.pipeline-stepper li {
-  cursor: pointer;
+.settings-row .field-hint {
+  margin: 4px 0 0;
+}
+
+.settings-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 @media (max-width: 900px) {
   .split-pane {
     grid-template-columns: 1fr;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

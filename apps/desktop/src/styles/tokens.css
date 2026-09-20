@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
 :root,
 [data-theme="dark"] {
   --bg-app: #0f1115;
@@ -6,6 +8,7 @@
   --border: #2a3140;
   --text: #e8eaed;
   --text-muted: #9aa3b2;
+  --text-faint: #6b7280;
   --accent: #3b82f6;
   --accent-soft: #1e3a5f;
   --success: #34d399;
@@ -19,8 +22,8 @@
   --topbar-height: 52px;
   --sidebar-width: 260px;
   --right-panel-width: 320px;
-  --font-sans: "Geist", "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 [data-theme="light"] {
@@ -30,6 +33,7 @@
   --border: #e5e7eb;
   --text: #111827;
   --text-muted: #6b7280;
+  --text-faint: #9ca3af;
   --accent: #2563eb;
   --accent-soft: #dbeafe;
   --success: #059669;
@@ -59,7 +63,19 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
 }

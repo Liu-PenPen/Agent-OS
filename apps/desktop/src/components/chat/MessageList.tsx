@@ -1,4 +1,5 @@
 import type { BotConfig, ChatMessage } from "@ml-aos/shared";
+import { botInitial, botTone } from "../../lib/bot-style";
 import { ClarificationCard } from "./ClarificationCard";
 
 type MessageListProps = {
@@ -10,11 +11,22 @@ type MessageListProps = {
 function authorLabel(
   message: ChatMessage,
   bots: BotConfig[],
-): { name: string; role?: string } {
-  if (message.author === "user") return { name: "You" };
-  if (message.author === "system") return { name: "System" };
+): { name: string; role?: string; bot?: BotConfig } {
+  if (message.author === "user") return { name: "我" };
+  if (message.author === "system") return { name: "系统" };
   const bot = bots.find((b) => b.id === message.botId);
-  return { name: bot?.name ?? "Bot", role: bot?.role };
+  return { name: bot?.name ?? "智能体", role: bot?.role, bot };
+}
+
+function formatTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
 }
 
 export function MessageList({
@@ -26,7 +38,7 @@ export function MessageList({
     return (
       <div className="timeline">
         <p className="muted empty-hint">
-          No messages yet. Mention a bot with @ to start a mock stream.
+          暂无消息。使用 @ 提及智能体即可开始模拟对话。
         </p>
       </div>
     );
@@ -48,16 +60,36 @@ export function MessageList({
             />
           );
         }
+        if (isYou) {
+          return (
+            <article key={msg.id} className="msg msg-you">
+              <div className="msg-bubble">{msg.content}</div>
+              <span className="msg-time">我 · {formatTime(msg.createdAt)}</span>
+            </article>
+          );
+        }
         return (
-          <article
-            key={msg.id}
-            className={`message ${isYou ? "message-you" : "message-bot"}`}
-          >
-            <div className="message-meta">
-              <strong>{meta.name}</strong>
-              {meta.role ? <span className="role-badge">{meta.role}</span> : null}
+          <article key={msg.id} className="msg msg-bot">
+            <span
+              className={`agent-avatar lg tone-${botTone(meta.bot)}`}
+              aria-hidden
+            >
+              {botInitial(meta.bot ?? { name: meta.name, role: meta.role ?? "" })}
+            </span>
+            <div className="msg-col">
+              <div className="msg-meta">
+                <strong>{meta.name}</strong>
+                {meta.role ? (
+                  <span className={`role-pill tone-${botTone(meta.bot)}`}>
+                    {meta.role}
+                  </span>
+                ) : null}
+              </div>
+              <div className="msg-body">
+                {msg.content || (msg.author === "bot" ? "…" : "")}
+              </div>
+              <span className="msg-time">{formatTime(msg.createdAt)}</span>
             </div>
-            <p>{msg.content || (msg.author === "bot" ? "…" : "")}</p>
           </article>
         );
       })}

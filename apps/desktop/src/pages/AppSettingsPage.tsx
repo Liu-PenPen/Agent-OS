@@ -9,6 +9,12 @@ import type { AppOutletContext } from "../lib/app-context";
 const THEMES: ThemeMode[] = ["dark", "light", "system"];
 const ENGINES: EngineKind[] = ["mock", "claude", "codex"];
 
+const THEME_LABEL: Record<ThemeMode, string> = {
+  dark: "深色",
+  light: "浅色",
+  system: "跟随系统",
+};
+
 export function AppSettingsPage() {
   const { theme, onThemeChange } = useOutletContext<AppOutletContext>();
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -24,7 +30,7 @@ export function AppSettingsPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setStatus(err instanceof Error ? err.message : "Failed to load");
+          setStatus(err instanceof Error ? err.message : "加载失败");
           setSettings({
             theme,
             defaultEngine: "mock",
@@ -47,9 +53,9 @@ export function AppSettingsPage() {
     try {
       const saved = await api.patchSettings(patch);
       setSettings(saved);
-      setStatus("Saved");
+      setStatus("已保存");
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : "Save failed");
+      setStatus(err instanceof Error ? err.message : "保存失败");
     } finally {
       setBusy(false);
     }
@@ -58,7 +64,7 @@ export function AppSettingsPage() {
   function handleTheme(mode: ThemeMode) {
     onThemeChange(mode);
     setSettings((prev) => (prev ? { ...prev, theme: mode } : prev));
-    setStatus("Theme updated");
+    setStatus("主题已更新");
   }
 
   async function handleBrowseDataDir() {
@@ -69,7 +75,7 @@ export function AppSettingsPage() {
   if (!settings) {
     return (
       <div className="page">
-        <p className="muted">Loading settings…</p>
+        <p className="muted">正在加载设置…</p>
       </div>
     );
   }
@@ -78,43 +84,19 @@ export function AppSettingsPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="muted">Settings</p>
-          <h1>App Preferences</h1>
-          <p className="page-lead">
-            Global settings and developer environment configuration.
-          </p>
+          <p className="muted">设置</p>
+          <h1>应用偏好</h1>
+          <p className="page-lead">全局设置与开发环境配置。</p>
         </div>
         <Link className="btn-ghost" to="/">
-          Back home
+          返回首页
         </Link>
       </header>
 
       <section className="panel-form">
-        <h2 className="section-title">Appearance</h2>
-        <p className="field-hint">Governing theme for the workbench.</p>
-        <div
-          className="segmented"
-          role="group"
-          aria-label="Theme"
-        >
-          {THEMES.map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={theme === mode ? "active" : ""}
-              onClick={() => handleTheme(mode)}
-              disabled={busy}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel-form">
-        <h2 className="section-title">Execution Engines</h2>
+        <h2 className="section-title">执行引擎</h2>
         <label className="field">
-          <span>Default Engine</span>
+          <span>默认引擎</span>
           <select
             value={settings.defaultEngine}
             disabled={busy}
@@ -132,9 +114,9 @@ export function AppSettingsPage() {
       </section>
 
       <section className="panel-form">
-        <h2 className="section-title">Workspace Environment</h2>
+        <h2 className="section-title">工作区环境</h2>
         <label className="field">
-          <span>Default Data Directory</span>
+          <span>默认数据目录</span>
           <div className="field-row">
             <input
               className="mono"
@@ -151,22 +133,49 @@ export function AppSettingsPage() {
               disabled={busy}
               onClick={handleBrowseDataDir}
             >
-              Browse
+              浏览
             </button>
           </div>
+          <span className="field-hint">
+            用于存放智能体日志、上下文文件与临时产物。
+          </span>
         </label>
       </section>
 
       <section className="panel-form">
-        <h2 className="section-title">Interaction</h2>
-        <label className="field checkbox-field">
+        <h2 className="section-title">界面</h2>
+        <div className="settings-row">
+          <div>
+            <strong>外观</strong>
+            <p className="field-hint">在深色与浅色高对比模式之间切换。</p>
+          </div>
+          <div className="segmented" role="group" aria-label="主题">
+            {THEMES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={theme === mode ? "active" : ""}
+                onClick={() => handleTheme(mode)}
+                disabled={busy}
+              >
+                {THEME_LABEL[mode]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="field checkbox-field settings-row">
+          <div>
+            <strong>系统通知</strong>
+            <p className="field-hint">
+              当智能体需要人工确认（HITL）时提醒我。
+            </p>
+          </div>
           <input
             type="checkbox"
             checked={settings.notifications}
             disabled={busy}
             onChange={(e) => persist({ notifications: e.target.checked })}
           />
-          <span>System notifications for HITL confirmations</span>
         </label>
       </section>
 

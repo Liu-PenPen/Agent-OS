@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { ChatMessage } from "@ml-aos/shared";
+import { IconAlert } from "../shell/icons";
 
 type ClarificationCardProps = {
   message: ChatMessage;
@@ -14,29 +16,40 @@ export function ClarificationCard({
   onAnswer,
 }: ClarificationCardProps) {
   const c = message.clarification;
+  const answered = c?.status === "answered";
+  const [picked, setPicked] = useState<string | null>(
+    c?.selectedOptionId ?? null,
+  );
+
   if (!c) return null;
 
-  const answered = c.status === "answered";
-
   return (
-    <article className="message message-bot clarification-card">
-      <div className="message-meta">
-        <strong>{botName}</strong>
-        {botRole ? <span className="role-badge">{botRole}</span> : null}
-        <span className="status-chip status-needs_you">needs you</span>
-      </div>
+    <article className="clarification-card">
+      <header className="clarification-head">
+        <IconAlert />
+        <div>
+          <h4>需要人工确认</h4>
+          <p className="muted">
+            由 {botName} 发起
+            {botRole ? ` · ${botRole}` : ""}
+          </p>
+        </div>
+      </header>
       <p className="clarification-prompt">{c.prompt}</p>
       <div className="clarification-options">
         {c.options.map((opt) => {
-          const selected = c.selectedOptionId === opt.id;
+          const selected = answered
+            ? c.selectedOptionId === opt.id
+            : picked === opt.id;
           return (
             <button
               key={opt.id}
               type="button"
               className={`option-card ${selected ? "selected" : ""}`}
               disabled={answered}
-              onClick={() => onAnswer(c.id, opt.id)}
+              onClick={() => setPicked(opt.id)}
             >
+              <span className="radio-dot" aria-hidden />
               {opt.label}
             </button>
           );
@@ -44,12 +57,25 @@ export function ClarificationCard({
       </div>
       {answered ? (
         <p className="muted">
-          Answered
+          已答复
           {c.selectedOptionId
-            ? `: ${c.options.find((o) => o.id === c.selectedOptionId)?.label ?? c.selectedOptionId}`
+            ? `：${c.options.find((o) => o.id === c.selectedOptionId)?.label ?? c.selectedOptionId}`
             : ""}
         </p>
-      ) : null}
+      ) : (
+        <div className="clarification-actions">
+          <button
+            type="button"
+            className="btn-confirm"
+            disabled={!picked}
+            onClick={() => {
+              if (picked) onAnswer(c.id, picked);
+            }}
+          >
+            确认策略
+          </button>
+        </div>
+      )}
     </article>
   );
 }

@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Date:** 2026-09-20  
-**Commit:** (see git log) — feat: desktop shell layout and theme tokens
+**Commit:** `bad48d7` — feat: desktop shell layout and theme tokens
 
 ---
 

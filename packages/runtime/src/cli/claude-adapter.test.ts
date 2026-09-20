@@ -5,6 +5,7 @@ import type { ChildProcess } from "node:child_process";
 import {
   ClaudeCliAdapter,
   parseClaudeStdoutLine,
+  resolveClaudeCommand,
   type SpawnFn,
 } from "./claude-adapter.js";
 import {
@@ -81,6 +82,22 @@ describe("parseClaudeStdoutLine", () => {
   });
 });
 
+describe("resolveClaudeCommand", () => {
+  it("uses ML_AOS_CLAUDE_PATH when set", () => {
+    expect(
+      resolveClaudeCommand(
+        { ML_AOS_CLAUDE_PATH: "D:\\tools\\claude.exe" },
+        "win32",
+        "C:\\node\\node.exe",
+      ),
+    ).toBe("D:\\tools\\claude.exe");
+  });
+
+  it("returns claude on non-Windows", () => {
+    expect(resolveClaudeCommand({}, "linux", "/usr/bin/node")).toBe("claude");
+  });
+});
+
 describe("ClaudeCliAdapter", () => {
   it("streams text_delta from mocked spawn stdout (no real network)", async () => {
     const spawnFn: SpawnFn = vi.fn((_cmd, _args, _opts) =>
@@ -103,7 +120,7 @@ describe("ClaudeCliAdapter", () => {
       }),
     );
 
-    const adapter = new ClaudeCliAdapter(spawnFn);
+    const adapter = new ClaudeCliAdapter(spawnFn, "C:\\fake\\claude.exe");
     const chunks: string[] = [];
     let sessionId: string | undefined;
 
@@ -116,7 +133,9 @@ describe("ClaudeCliAdapter", () => {
     }
 
     expect(spawnFn).toHaveBeenCalled();
-    const [, args, opts] = (spawnFn as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [cmd, args, opts] = (spawnFn as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(cmd).toBe("C:\\fake\\claude.exe");
     expect(args).toContain("-p");
     expect(args).toContain("hello");
     expect(opts.shell).toBe(false);
@@ -126,7 +145,7 @@ describe("ClaudeCliAdapter", () => {
 
   it("throws CliEngineUnavailableError when claude binary is missing", async () => {
     const spawnFn: SpawnFn = vi.fn(() => fakeChild({ enoent: true }));
-    const adapter = new ClaudeCliAdapter(spawnFn);
+    const adapter = new ClaudeCliAdapter(spawnFn, "missing-claude");
 
     let caught: unknown;
     try {

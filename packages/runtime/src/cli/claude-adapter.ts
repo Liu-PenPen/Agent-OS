@@ -1,8 +1,11 @@
 import {
   spawn,
+  spawnSync,
   type ChildProcess,
   type SpawnOptions,
 } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { CliAdapter, CliEvent, CliRunInput } from "./types.js";
 import {
@@ -15,6 +18,48 @@ export type SpawnFn = (
   args: readonly string[],
   options: SpawnOptions,
 ) => ChildProcess;
+
+/**
+ * Resolve a spawnable Claude binary.
+ * On Windows, `shell:false` cannot run `claude.cmd` shims — prefer the real `.exe`.
+ */
+export function resolveClaudeCommand(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+): string {
+  const override = env.ML_AOS_CLAUDE_PATH?.trim();
+  if (override) return override;
+
+  if (platform !== "win32") {
+    return "claude";
+  }
+
+  const besideNode = join(
+    dirname(execPath),
+    "node_modules",
+    "@anthropic-ai",
+    "claude-code",
+    "bin",
+    "claude.exe",
+  );
+  if (existsSync(besideNode)) return besideNode;
+
+  const where = spawnSync("where.exe", ["claude"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (where.status === 0 && where.stdout) {
+    const lines = where.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const exe = lines.find((line) => /\.exe$/i.test(line));
+    if (exe) return exe;
+  }
+
+  return "claude.exe";
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -108,7 +153,7 @@ function buildArgs(input: CliRunInput): string[] {
 export class ClaudeCliAdapter implements CliAdapter {
   constructor(
     private readonly spawnFn: SpawnFn = spawn,
-    private readonly command = "claude",
+    private readonly command: string = resolveClaudeCommand(),
   ) {}
 
   async *run(input: CliRunInput): AsyncIterable<CliEvent> {

@@ -5,13 +5,14 @@ import { ClaudeCliAdapter } from "./claude-adapter.js";
 import { CodexCliStubAdapter } from "./codex-adapter.js";
 
 const mock = new MockCliAdapter();
-const claude = new ClaudeCliAdapter();
 const codex = new CodexCliStubAdapter();
+let claude: ClaudeCliAdapter | undefined;
 
 export function resolveAdapter(engine: EngineKind): CliAdapter {
   switch (engine) {
     case "claude":
-      return claude;
+      // Resolve binary at first use (Windows needs real .exe, not claude.cmd).
+      return (claude ??= new ClaudeCliAdapter());
     case "codex":
       return codex;
     case "mock":

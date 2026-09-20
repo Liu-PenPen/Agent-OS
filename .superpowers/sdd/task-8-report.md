@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Date:** 2026-09-20  
-**Commit:** (see git log after commit)
+**Commit:** `3936acc` — feat: wire home chat pipeline and clarification
 
 ---
 

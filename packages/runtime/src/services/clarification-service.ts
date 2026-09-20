@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ChatMessage } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
 import type { ChatEvent } from "./chat-service.js";
+import type { PipelineRunner } from "./pipeline-runner.js";
 
 export interface AnswerInput {
   optionId: string;
@@ -15,6 +16,7 @@ export class ClarificationService {
   constructor(
     private readonly store: JsonStore,
     private readonly emit?: (event: ChatEvent) => void,
+    private readonly pipelineRunner?: Pick<PipelineRunner, "resume">,
   ) {}
 
   async list(input: ListClarificationsInput = {}): Promise<ChatMessage[]> {
@@ -69,9 +71,20 @@ export class ClarificationService {
     };
     state.messages.push(systemMessage);
 
+    const topic = state.topics.find((t) => t.id === message.topicId);
+    const shouldResume =
+      Boolean(topic?.pipelineTaskId) &&
+      topic?.pipelineStage !== "completed" &&
+      topic?.pipelineStage !== "blocked" &&
+      topic?.pipelineStage !== undefined;
+
     await this.store.save(state);
     this.emit?.({ type: "message.upsert", message: updated });
     this.emit?.({ type: "message.upsert", message: systemMessage });
+
+    if (shouldResume && topic) {
+      void this.pipelineRunner?.resume(topic.id, option.label);
+    }
 
     return updated;
   }

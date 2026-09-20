@@ -82,7 +82,11 @@ const pipelineRunner = new PipelineRunner(
   broadcast,
 );
 pipelineService.setOnDispatch((pipelineId) => pipelineRunner.start(pipelineId));
-const clarificationService = new ClarificationService(store, broadcast);
+const clarificationService = new ClarificationService(
+  store,
+  broadcast,
+  pipelineRunner,
+);
 
 const router = createRouter();
 registerWorkspaceRoutes(router, workspaceService);

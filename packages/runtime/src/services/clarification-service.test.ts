@@ -111,4 +111,31 @@ describe("ClarificationService", () => {
     expect(systemMsg).toBeTruthy();
     expect(systemMsg!.content).toContain("Alpha");
   });
+
+  it("calls pipelineRunner.resume after answer when topic has active pipeline", async () => {
+    const resumes: Array<{ topicId: string; label: string }> = [];
+    clarifications = new ClarificationService(store, undefined, {
+      resume(tid, label) {
+        resumes.push({ topicId: tid, label });
+      },
+    });
+
+    await chat.sendMessage(topicId, {
+      content: "[clarify] need choice",
+      mentionBotId: botId,
+    });
+
+    const state = await store.load();
+    const topic = state.topics.find((t) => t.id === topicId)!;
+    topic.pipelineTaskId = "pipe-1";
+    topic.pipelineStage = "developing";
+    await store.save(state);
+
+    const pending = await clarifications.list({ status: "pending" });
+    await clarifications.answer(pending[0].clarification!.id, {
+      optionId: "a",
+    });
+
+    expect(resumes).toEqual([{ topicId, label: "Alpha" }]);
+  });
 });

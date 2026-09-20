@@ -29,6 +29,8 @@ function buildStagePrompt(input: {
 }
 
 export class PipelineRunner {
+  private pausedPipelines = new Set<string>();
+
   constructor(
     private pipelines: PipelineService,
     private botRun: BotRunService,
@@ -41,6 +43,60 @@ export class PipelineRunner {
     void this.runUntilSettled(pipelineId).catch(() => {
       /* stage failure already persisted */
     });
+  }
+
+  /**
+   * After a clarification answer: re-run the paused stage with a follow-up
+   * prompt, then continue chaining stages.
+   */
+  async resume(topicId: string, answerLabel: string): Promise<void> {
+    const state = await this.store.load();
+    const topic = state.topics.find((t) => t.id === topicId);
+    if (!topic?.pipelineTaskId) return;
+
+    const pipelineId = topic.pipelineTaskId;
+    if (!this.pausedPipelines.has(pipelineId)) return;
+
+    const task = await this.pipelines.get(pipelineId);
+    if (!task) return;
+    if (task.stage === "completed" || task.stage === "blocked") return;
+    if (!isActiveStage(task.stage)) return;
+
+    const stageEntry = task.stages.find((s) => s.stage === task.stage);
+    if (!stageEntry || stageEntry.status !== "running") return;
+
+    const botId = stageEntry.botId;
+    if (!botId) {
+      await this.markFailed(
+        pipelineId,
+        `No bot assigned for stage ${task.stage}`,
+      );
+      return;
+    }
+
+    this.pausedPipelines.delete(pipelineId);
+
+    const prompt = `User answered clarification: ${answerLabel}. Continue the stage.`;
+    const result = await this.botRun.run({
+      topicId,
+      botId,
+      prompt,
+    });
+
+    if (result.clarificationPending) {
+      this.pausedPipelines.add(pipelineId);
+      return;
+    }
+
+    if (!result.ok) {
+      await this.markFailed(pipelineId, result.error ?? "Stage bot run failed");
+      return;
+    }
+
+    const excerpt = await this.messageExcerpt(result.messageId, 500);
+    await this.setStageDetail(pipelineId, excerpt);
+    await this.pipelines.advance(pipelineId);
+    await this.runUntilSettled(pipelineId);
   }
 
   /** Used by tests — runs a single stage */
@@ -96,6 +152,7 @@ export class PipelineRunner {
     });
 
     if (result.clarificationPending) {
+      this.pausedPipelines.add(pipelineId);
       return;
     }
 

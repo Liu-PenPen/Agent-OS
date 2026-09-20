@@ -210,4 +210,67 @@ describe("PipelineRunner", () => {
       "running",
     );
   });
+
+  it("pauses on clarification then advances after resume with answer", async () => {
+    await botService.create({
+      name: "Dev",
+      role: "developer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+    await botService.create({
+      name: "QA",
+      role: "tester",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+    await botService.create({
+      name: "Review",
+      role: "reviewer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+
+    const prompts: string[] = [];
+    let call = 0;
+    const stubRun: BotRunService = {
+      run: async (req: BotRunRequest): Promise<BotRunResult> => {
+        prompts.push(req.prompt);
+        call += 1;
+        if (call === 1) {
+          return {
+            ok: true,
+            messageId: "msg-clarify",
+            clarificationPending: true,
+          };
+        }
+        return {
+          ok: true,
+          messageId: `msg-${call}`,
+        };
+      },
+      abort: async () => ({ ok: true as const, aborted: false }),
+    } as BotRunService;
+
+    runner = new PipelineRunner(pipelines, stubRun, store);
+    const task = await pipelines.dispatch(topicId, { title: "Need clarify" });
+
+    await runner.runStage(task.id);
+    let p = await pipelines.get(task.id);
+    expect(p?.stage).toBe("developing");
+    expect(p?.stages.find((s) => s.stage === "developing")?.status).toBe(
+      "running",
+    );
+
+    await runner.resume(topicId, "Alpha");
+
+    p = await pipelines.get(task.id);
+    expect(p?.stage).toBe("completed");
+    expect(prompts[1]).toBe(
+      "User answered clarification: Alpha. Continue the stage.",
+    );
+  });
 });

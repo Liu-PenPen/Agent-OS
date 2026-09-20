@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Date:** 2026-09-20  
-**Commit:** (see git log after commit)
+**Commit:** `a670045` — feat: pipeline dispatch and clarification HITL
 
 ---
 

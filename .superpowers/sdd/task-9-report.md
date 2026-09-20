@@ -84,3 +84,23 @@ pnpm --filter @ml-aos/desktop build  # PASS
 ## Next task
 
 Task 10 — Git clone integration test.
+
+---
+
+## Final fix: orphan runtime on health timeout (2026-09-20)
+
+**Finding:** If `spawn_runtime()` succeeded but `wait_for_health()` timed out, the spawned Node process kept listening on `:17890` because `ensure_runtime()` returned `Err` without killing the child.
+
+**Fix:** In `sidecar.rs` `ensure_runtime()`, on health-wait failure call existing `kill_process_tree(&mut child)` (`taskkill /PID … /T /F` on Windows) before returning `Err`. `lib.rs` unchanged — cleanup is internal to `ensure_runtime()`.
+
+**Verification:**
+
+```bash
+# Attempted after fix (MSVC host lacks link.exe; gnu build scripts also hit link.exe on host):
+cargo check                              # FAIL — linker `link.exe` not found
+rustup run stable-x86_64-pc-windows-gnu cargo check --target x86_64-pc-windows-gnu  # FAIL (same)
+
+# Logic review: spawn → health fail → kill_process_tree → Err; no Child stored in SidecarState on Err path.
+```
+
+**Commit:** `fix: kill runtime child if health wait fails`

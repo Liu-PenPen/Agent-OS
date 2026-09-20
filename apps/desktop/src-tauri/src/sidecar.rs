@@ -32,8 +32,11 @@ pub fn ensure_runtime() -> Result<Option<Child>, String> {
     return Ok(None);
   }
 
-  let child = spawn_runtime()?;
-  wait_for_health()?;
+  let mut child = spawn_runtime()?;
+  if let Err(e) = wait_for_health() {
+    kill_process_tree(&mut child);
+    return Err(e);
+  }
   Ok(Some(child))
 }
 

@@ -1,0 +1,11 @@
+{
+  "name": "ml-aos",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "test": "pnpm -r test",
+    "dev:runtime": "pnpm --filter @ml-aos/runtime dev",
+    "dev:ui": "pnpm --filter @ml-aos/desktop dev",
+    "tauri": "pnpm --filter @ml-aos/desktop tauri"
+  }
+}

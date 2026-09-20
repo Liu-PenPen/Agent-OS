@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Date:** 2026-09-20  
-**Commit:** (see git log) — feat: topics chat with mock CLI streaming
+**Commit:** `6dad0ad` — feat: topics chat with mock CLI streaming
 
 ---
 

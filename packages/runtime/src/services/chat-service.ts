@@ -125,6 +125,7 @@ export class ChatService {
     });
 
     let content = "";
+    let clarificationMessageId: string | undefined;
     for await (const event of this.adapter.run({
       prompt: input.content,
       cwd: workspace.localPath,
@@ -133,6 +134,18 @@ export class ChatService {
       if (event.type === "text_delta") {
         content += event.text;
         await this.updateMessageContent(botMessage.id, content);
+      } else if (event.type === "clarification") {
+        const clarificationMsg = await this.appendClarificationMessage({
+          topicId,
+          botId: bot.id,
+          clarification: {
+            id: event.id,
+            prompt: event.prompt,
+            options: event.options,
+            status: "pending",
+          },
+        });
+        clarificationMessageId = clarificationMsg.id;
       } else if (event.type === "done" && event.sessionId) {
         await this.updateTopicSession(topicId, event.sessionId);
       } else if (event.type === "error") {
@@ -140,10 +153,42 @@ export class ChatService {
       }
     }
 
+    if (clarificationMessageId) {
+      const finalMessages = await this.listMessages(topicId);
+      return finalMessages.filter(
+        (m) =>
+          m.id === userMessage.id ||
+          m.id === botMessage.id ||
+          m.id === clarificationMessageId,
+      );
+    }
+
     const finalMessages = await this.listMessages(topicId);
     return finalMessages.filter(
       (m) => m.id === userMessage.id || m.id === botMessage.id,
     );
+  }
+
+  private async appendClarificationMessage(input: {
+    topicId: string;
+    botId: string;
+    clarification: NonNullable<ChatMessage["clarification"]>;
+  }): Promise<ChatMessage> {
+    const state = await this.store.load();
+    const message: ChatMessage = {
+      id: randomUUID(),
+      topicId: input.topicId,
+      author: "bot",
+      botId: input.botId,
+      content: input.clarification.prompt,
+      createdAt: new Date().toISOString(),
+      kind: "clarification",
+      clarification: input.clarification,
+    };
+    state.messages.push(message);
+    await this.store.save(state);
+    this.emit?.({ type: "message.upsert", message });
+    return message;
   }
 
   private async appendMessage(

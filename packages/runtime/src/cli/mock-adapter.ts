@@ -23,10 +23,24 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 
 export class MockCliAdapter implements CliAdapter {
   async *run(input: CliRunInput): AsyncIterable<CliEvent> {
-    const text = `Mock response to: ${input.prompt}`;
-    const chunks = text.match(/.{1,8}/g) ?? [text];
-
     try {
+      if (input.prompt.includes("[clarify]")) {
+        yield {
+          type: "clarification",
+          id: randomUUID(),
+          prompt: "Which approach should we take?",
+          options: [
+            { id: "opt-a", label: "Option A" },
+            { id: "opt-b", label: "Option B" },
+          ],
+        };
+        yield { type: "done", sessionId: input.sessionId ?? randomUUID() };
+        return;
+      }
+
+      const text = `Mock response to: ${input.prompt}`;
+      const chunks = text.match(/.{1,8}/g) ?? [text];
+
       for (const chunk of chunks) {
         await delay(DELAY_MS, input.signal);
         yield { type: "text_delta", text: chunk };

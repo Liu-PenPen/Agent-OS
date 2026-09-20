@@ -96,4 +96,18 @@ describe("ChatService", () => {
       chat.sendMessage(topic.id, { content: "hi", mentionBotId: "missing" }),
     ).rejects.toThrow(/not found/i);
   });
+
+  it("persists clarification message when mock emits clarify event", async () => {
+    const topic = await chat.createTopic({ workspaceId, title: "T" });
+    await chat.sendMessage(topic.id, {
+      content: "[clarify] pick approach",
+      mentionBotId: botId,
+    });
+
+    const messages = await chat.listMessages(topic.id);
+    const clarification = messages.find((m) => m.kind === "clarification");
+    expect(clarification).toBeTruthy();
+    expect(clarification!.clarification?.status).toBe("pending");
+    expect(clarification!.clarification?.options).toHaveLength(2);
+  });
 });

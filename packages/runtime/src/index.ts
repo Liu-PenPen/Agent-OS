@@ -4,11 +4,15 @@ import { JsonStore } from "./store/json-store.js";
 import { WorkspaceService } from "./services/workspace-service.js";
 import { BotService } from "./services/bot-service.js";
 import { ChatService } from "./services/chat-service.js";
+import { PipelineService } from "./services/pipeline-service.js";
+import { ClarificationService } from "./services/clarification-service.js";
 import { createRouter } from "./http/router.js";
 import { sendJson } from "./http/json.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerBotRoutes } from "./routes/bots.js";
 import { registerTopicRoutes } from "./routes/topics.js";
+import { registerPipelineRoutes } from "./routes/pipelines.js";
+import { registerClarificationRoutes } from "./routes/clarifications.js";
 import { attachWebSocket } from "./ws.js";
 
 const HOST = "127.0.0.1";
@@ -43,11 +47,15 @@ const chatService = new ChatService(
   undefined,
   broadcast,
 );
+const pipelineService = new PipelineService(store, broadcast, 5000);
+const clarificationService = new ClarificationService(store, broadcast);
 
 const router = createRouter();
 registerWorkspaceRoutes(router, workspaceService);
 registerBotRoutes(router, botService);
 registerTopicRoutes(router, chatService);
+registerPipelineRoutes(router, pipelineService);
+registerClarificationRoutes(router, clarificationService);
 
 server.listen(PORT, HOST, () => {
   console.log(`Runtime listening on http://${HOST}:${PORT}`);

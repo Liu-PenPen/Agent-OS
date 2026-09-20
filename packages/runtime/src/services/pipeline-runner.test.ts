@@ -211,6 +211,89 @@ describe("PipelineRunner", () => {
     );
   });
 
+  it("abort during slow stage run marks blocked with aborted by user", async () => {
+    await botService.create({
+      name: "Dev",
+      role: "developer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+    await botService.create({
+      name: "QA",
+      role: "tester",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+    await botService.create({
+      name: "Review",
+      role: "reviewer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+
+    let signalStarted!: () => void;
+    const whenStarted = new Promise<void>((resolve) => {
+      signalStarted = resolve;
+    });
+
+    const slowAdapter: CliAdapter = {
+      async *run(input) {
+        signalStarted();
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, 5_000);
+          input.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true },
+          );
+        }).catch(() => {
+          /* aborted */
+        });
+        if (input.signal?.aborted) {
+          yield { type: "error", message: "Aborted" };
+          return;
+        }
+        yield { type: "text_delta", text: "should not finish" };
+        yield { type: "done", sessionId: "sess-slow" };
+      },
+    };
+
+    const workspaceService = new WorkspaceService(store);
+    const settingsService = new SettingsService(store);
+    botRun = new BotRunService(
+      store,
+      workspaceService,
+      botService,
+      settingsService,
+      undefined,
+      slowAdapter,
+    );
+    runner = new PipelineRunner(pipelines, botRun, store);
+
+    const task = await pipelines.dispatch(topicId, { title: "Abort mid-run" });
+    const runPromise = runner.runStage(task.id);
+    await whenStarted;
+    const abortResult = await botRun.abort(topicId);
+    expect(abortResult.aborted).toBe(true);
+    await runner.handleAbort(topicId, abortResult.aborted);
+    await runPromise;
+
+    const p = await pipelines.get(task.id);
+    expect(p?.stage).toBe("blocked");
+    const developing = p?.stages.find((s) => s.stage === "developing");
+    expect(developing?.status).toBe("failed");
+    expect(developing?.detail).toBe("aborted by user");
+
+    const topic = await chat.getTopic(topicId);
+    expect(topic?.pipelineStage).toBe("blocked");
+  });
+
   it("pauses on clarification then advances after resume with answer", async () => {
     await botService.create({
       name: "Dev",

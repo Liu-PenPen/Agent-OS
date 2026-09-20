@@ -82,6 +82,7 @@ const pipelineRunner = new PipelineRunner(
   broadcast,
 );
 pipelineService.setOnDispatch((pipelineId) => pipelineRunner.start(pipelineId));
+chatService.setPipelineRunner(pipelineRunner);
 const clarificationService = new ClarificationService(
   store,
   broadcast,

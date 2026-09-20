@@ -6,6 +6,7 @@ import type { BotService } from "./bot-service.js";
 import type { SettingsService } from "./settings-service.js";
 import type { CliAdapter } from "../cli/types.js";
 import { BotRunService } from "./bot-run-service.js";
+import type { PipelineRunner } from "./pipeline-runner.js";
 
 export interface CreateTopicInput {
   workspaceId: string;
@@ -27,6 +28,7 @@ export type ChatEvent =
 
 export class ChatService {
   private readonly botRun: BotRunService;
+  private pipelineAbort?: Pick<PipelineRunner, "handleAbort">;
 
   constructor(
     private readonly store: JsonStore,
@@ -53,8 +55,14 @@ export class ChatService {
       );
   }
 
+  setPipelineRunner(runner: Pick<PipelineRunner, "handleAbort">): void {
+    this.pipelineAbort = runner;
+  }
+
   async abort(topicId: string): Promise<{ ok: true; aborted: boolean }> {
-    return this.botRun.abort(topicId);
+    const result = await this.botRun.abort(topicId);
+    await this.pipelineAbort?.handleAbort(topicId, result.aborted);
+    return result;
   }
 
   async createTopic(input: CreateTopicInput): Promise<Topic> {

@@ -13,6 +13,17 @@ function isActiveStage(stage: PipelineStage): stage is ActiveStage {
   return (ACTIVE_STAGES as readonly string[]).includes(stage);
 }
 
+function stageFailDetail(error: string | undefined): string {
+  if (
+    error === "Aborted" ||
+    error === "aborted by user" ||
+    error?.toLowerCase() === "aborted"
+  ) {
+    return "aborted by user";
+  }
+  return error ?? "Stage bot run failed";
+}
+
 function buildStagePrompt(input: {
   stage: ActiveStage;
   title: string;
@@ -89,7 +100,10 @@ export class PipelineRunner {
     }
 
     if (!result.ok) {
-      await this.markFailed(pipelineId, result.error ?? "Stage bot run failed");
+      await this.markFailed(
+        pipelineId,
+        stageFailDetail(result.error),
+      );
       return;
     }
 
@@ -97,6 +111,29 @@ export class PipelineRunner {
     await this.setStageDetail(pipelineId, excerpt);
     await this.pipelines.advance(pipelineId);
     await this.runUntilSettled(pipelineId);
+  }
+
+  /**
+   * Topic abort API: always clear the paused gate.
+   * If a bot run was in flight (`botWasRunning`), stage failure is persisted when
+   * that run settles (`ok:false` → markFailed). Otherwise mark blocked now
+   * (e.g. abort while paused on clarification).
+   */
+  async handleAbort(topicId: string, botWasRunning = false): Promise<void> {
+    const state = await this.store.load();
+    const topic = state.topics.find((t) => t.id === topicId);
+    if (!topic?.pipelineTaskId) return;
+
+    const pipelineId = topic.pipelineTaskId;
+    this.pausedPipelines.delete(pipelineId);
+
+    if (botWasRunning) return;
+
+    const task = await this.pipelines.get(pipelineId);
+    if (!task) return;
+    if (task.stage === "completed" || task.stage === "blocked") return;
+
+    await this.markFailed(pipelineId, "aborted by user");
   }
 
   /** Used by tests — runs a single stage */
@@ -157,7 +194,10 @@ export class PipelineRunner {
     }
 
     if (!result.ok) {
-      await this.markFailed(pipelineId, result.error ?? "Stage bot run failed");
+      await this.markFailed(
+        pipelineId,
+        stageFailDetail(result.error),
+      );
       return;
     }
 
@@ -214,9 +254,12 @@ export class PipelineRunner {
     pipelineId: string,
     detail: string,
   ): Promise<void> {
+    this.pausedPipelines.delete(pipelineId);
+
     const state = await this.store.load();
     const task = state.pipelines.find((p) => p.id === pipelineId);
     if (!task) return;
+    if (task.stage === "blocked") return;
 
     const stageEntry = task.stages.find((s) => s.stage === task.stage);
     if (stageEntry) {

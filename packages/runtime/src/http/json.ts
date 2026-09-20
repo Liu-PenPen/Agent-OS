@@ -12,11 +12,24 @@ export async function readJsonBody<T = unknown>(
   return JSON.parse(raw) as T;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+} as const;
+
+export function applyCors(res: ServerResponse): void {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    res.setHeader(key, value);
+  }
+}
+
 export function sendJson(
   res: ServerResponse,
   status: number,
   body: unknown,
 ): void {
+  applyCors(res);
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
 }

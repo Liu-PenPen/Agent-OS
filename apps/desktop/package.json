@@ -1,0 +1,32 @@
+{
+  "name": "@ml-aos/desktop",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@ml-aos/shared": "workspace:*",
+    "@tauri-apps/api": "^2.4.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.4.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^26.0.0",
+    "oxlint": "^1.81.0",
+    "typescript": "~5.8.2",
+    "vite": "^8.3.0",
+    "vitest": "^3.0.9"
+  }
+}

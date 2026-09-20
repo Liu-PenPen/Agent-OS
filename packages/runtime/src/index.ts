@@ -7,12 +7,14 @@ import { ChatService } from "./services/chat-service.js";
 import { PipelineService } from "./services/pipeline-service.js";
 import { ClarificationService } from "./services/clarification-service.js";
 import { createRouter } from "./http/router.js";
-import { sendJson } from "./http/json.js";
+import { applyCors, sendJson } from "./http/json.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
 import { registerBotRoutes } from "./routes/bots.js";
 import { registerTopicRoutes } from "./routes/topics.js";
 import { registerPipelineRoutes } from "./routes/pipelines.js";
 import { registerClarificationRoutes } from "./routes/clarifications.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
+import { SettingsService } from "./services/settings-service.js";
 import { attachWebSocket } from "./ws.js";
 
 const HOST = "127.0.0.1";
@@ -22,8 +24,16 @@ const dataDir = process.env.ML_AOS_DATA_DIR ?? join(process.cwd(), "data");
 const store = new JsonStore(dataDir);
 const workspaceService = new WorkspaceService(store);
 const botService = new BotService(store);
+const settingsService = new SettingsService(store);
 
 const server = createServer(async (req, res) => {
+  applyCors(res);
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   const url = new URL(req.url ?? "/", `http://${HOST}`);
   const pathname = url.pathname;
 
@@ -56,6 +66,7 @@ registerBotRoutes(router, botService);
 registerTopicRoutes(router, chatService);
 registerPipelineRoutes(router, pipelineService);
 registerClarificationRoutes(router, clarificationService);
+registerSettingsRoutes(router, settingsService);
 
 server.listen(PORT, HOST, () => {
   console.log(`Runtime listening on http://${HOST}:${PORT}`);

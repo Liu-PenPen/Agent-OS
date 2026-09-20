@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { ChatMessage, EngineKind, Topic } from "@ml-aos/shared";
+import type { ChatMessage, Topic } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
 import type { WorkspaceService } from "./workspace-service.js";
 import type { BotService } from "./bot-service.js";
 import type { SettingsService } from "./settings-service.js";
-import { resolveAdapter } from "../cli/resolve-adapter.js";
-import { CliEngineUnavailableError } from "../cli/errors.js";
 import type { CliAdapter } from "../cli/types.js";
+import { BotRunService } from "./bot-run-service.js";
 
 export interface CreateTopicInput {
   workspaceId: string;
@@ -27,8 +26,7 @@ export type ChatEvent =
     };
 
 export class ChatService {
-  private readonly adapterOverride?: CliAdapter;
-  private readonly runControllers = new Map<string, AbortController>();
+  private readonly botRun: BotRunService;
 
   constructor(
     private readonly store: JsonStore,
@@ -36,30 +34,27 @@ export class ChatService {
     private readonly botService: BotService,
     adapter?: CliAdapter,
     private readonly emit?: (event: ChatEvent) => void,
-    private readonly settingsService?: SettingsService,
+    settingsService?: SettingsService,
+    botRun?: BotRunService,
   ) {
-    this.adapterOverride = adapter;
-  }
-
-  private async pickAdapter(botEngine: EngineKind): Promise<CliAdapter> {
-    if (this.adapterOverride) return this.adapterOverride;
-    const settings = await this.settingsService?.get();
-    const engine = botEngine || settings?.defaultEngine || "mock";
-    return resolveAdapter(engine);
+    this.botRun =
+      botRun ??
+      new BotRunService(
+        store,
+        workspaceService,
+        botService,
+        settingsService,
+        emit
+          ? (event) => {
+              this.emit?.(event);
+            }
+          : undefined,
+        adapter,
+      );
   }
 
   async abort(topicId: string): Promise<{ ok: true; aborted: boolean }> {
-    const topic = await this.getTopic(topicId);
-    if (!topic) {
-      throw new Error(`Topic not found: ${topicId}`);
-    }
-    const controller = this.runControllers.get(topicId);
-    if (!controller) {
-      return { ok: true, aborted: false };
-    }
-    controller.abort();
-    this.runControllers.delete(topicId);
-    return { ok: true, aborted: true };
+    return this.botRun.abort(topicId);
   }
 
   async createTopic(input: CreateTopicInput): Promise<Topic> {
@@ -129,116 +124,26 @@ export class ChatService {
       return [userMessage];
     }
 
-    const bot = await this.botService.get(input.mentionBotId);
-    if (!bot) {
-      throw new Error(`Bot not found: ${input.mentionBotId}`);
-    }
-    if (!bot.enabled) {
-      throw new Error(`Bot is disabled: ${input.mentionBotId}`);
-    }
-
-    const workspace = await this.workspaceService.get(topic.workspaceId);
-    if (!workspace) {
-      throw new Error(`Workspace not found: ${topic.workspaceId}`);
-    }
-
-    const botMessage = await this.appendMessage({
+    const result = await this.botRun.run({
       topicId,
-      author: "bot",
-      botId: bot.id,
-      content: "",
+      botId: input.mentionBotId,
+      prompt: input.content,
     });
 
-    const previous = this.runControllers.get(topicId);
-    previous?.abort();
-    const controller = new AbortController();
-    this.runControllers.set(topicId, controller);
-
-    let content = "";
-    let clarificationMessageId: string | undefined;
-    const adapter = await this.pickAdapter(bot.defaultEngine);
-    try {
-      for await (const event of adapter.run({
-        prompt: input.content,
-        cwd: workspace.localPath,
-        sessionId: topic.cliSessionId,
-        signal: controller.signal,
-      })) {
-        if (event.type === "text_delta") {
-          content += event.text;
-          await this.updateMessageContent(botMessage.id, content);
-        } else if (event.type === "clarification") {
-          const clarificationMsg = await this.appendClarificationMessage({
-            topicId,
-            botId: bot.id,
-            clarification: {
-              id: event.id,
-              prompt: event.prompt,
-              options: event.options,
-              status: "pending",
-            },
-          });
-          clarificationMessageId = clarificationMsg.id;
-        } else if (event.type === "done" && event.sessionId) {
-          await this.updateTopicSession(topicId, event.sessionId);
-        } else if (event.type === "error") {
-          await this.updateMessageContent(
-            botMessage.id,
-            `[error] ${event.message}`,
-          );
-        }
-      }
-    } catch (error) {
-      if (error instanceof CliEngineUnavailableError) {
-        await this.updateMessageContent(
-          botMessage.id,
-          `[error] ${error.message}`,
-        );
-        throw error;
-      }
-      throw error;
-    } finally {
-      if (this.runControllers.get(topicId) === controller) {
-        this.runControllers.delete(topicId);
-      }
-    }
-
-    if (clarificationMessageId) {
-      const finalMessages = await this.listMessages(topicId);
+    const finalMessages = await this.listMessages(topicId);
+    const userIndex = finalMessages.findIndex((m) => m.id === userMessage.id);
+    if (result.clarificationPending) {
       return finalMessages.filter(
-        (m) =>
+        (m, index) =>
           m.id === userMessage.id ||
-          m.id === botMessage.id ||
-          m.id === clarificationMessageId,
+          m.id === result.messageId ||
+          (index > userIndex && m.kind === "clarification"),
       );
     }
 
-    const finalMessages = await this.listMessages(topicId);
     return finalMessages.filter(
-      (m) => m.id === userMessage.id || m.id === botMessage.id,
+      (m) => m.id === userMessage.id || m.id === result.messageId,
     );
-  }
-
-  private async appendClarificationMessage(input: {
-    topicId: string;
-    botId: string;
-    clarification: NonNullable<ChatMessage["clarification"]>;
-  }): Promise<ChatMessage> {
-    const state = await this.store.load();
-    const message: ChatMessage = {
-      id: randomUUID(),
-      topicId: input.topicId,
-      author: "bot",
-      botId: input.botId,
-      content: input.clarification.prompt,
-      createdAt: new Date().toISOString(),
-      kind: "clarification",
-      clarification: input.clarification,
-    };
-    state.messages.push(message);
-    await this.store.save(state);
-    this.emit?.({ type: "message.upsert", message });
-    return message;
   }
 
   private async appendMessage(
@@ -259,32 +164,5 @@ export class ChatService {
     await this.store.save(state);
     this.emit?.({ type: "message.upsert", message });
     return message;
-  }
-
-  private async updateMessageContent(
-    messageId: string,
-    content: string,
-  ): Promise<ChatMessage> {
-    const state = await this.store.load();
-    const index = state.messages.findIndex((m) => m.id === messageId);
-    if (index === -1) {
-      throw new Error(`Message not found: ${messageId}`);
-    }
-    const updated: ChatMessage = { ...state.messages[index], content };
-    state.messages[index] = updated;
-    await this.store.save(state);
-    this.emit?.({ type: "message.upsert", message: updated });
-    return updated;
-  }
-
-  private async updateTopicSession(
-    topicId: string,
-    sessionId: string,
-  ): Promise<void> {
-    const state = await this.store.load();
-    const topic = state.topics.find((t) => t.id === topicId);
-    if (!topic) return;
-    topic.cliSessionId = sessionId;
-    await this.store.save(state);
   }
 }

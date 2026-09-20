@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-pick-folder"
+description = "Allows the pick_folder command (native directory dialog)."
+commands.allow = ["pick_folder"]

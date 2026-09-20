@@ -1,16 +1,18 @@
 /**
  * Pick a local folder via Tauri `pick_folder`, or fall back to prompt in browser.
- * Task 9 will implement the real command; until then invoke is stubbed.
  */
 export async function pickFolder(): Promise<string | null> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const path = await invoke<string>("pick_folder");
+    const path = await invoke<string | null>("pick_folder");
     if (typeof path === "string" && path.trim()) {
       return path.trim();
     }
+    if (path === null) {
+      return null;
+    }
   } catch {
-    // Not in Tauri, or command not registered yet.
+    // Not in Tauri, or dialog cancelled / command unavailable.
   }
 
   const fallback = window.prompt("Enter folder path");

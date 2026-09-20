@@ -14,10 +14,12 @@ Runtime API expected at `http://127.0.0.1:17890` (theme persist via GET/PATCH `/
 
 ## Tauri (native window)
 
-Requires Rust toolchain (`cargo` / `rustc`).
+Requires Rust toolchain (`cargo` / `rustc`) and Node on `PATH`.
 
 ```bash
 pnpm --filter @ml-aos/desktop tauri dev
 ```
+
+On start, Tauri probes `http://127.0.0.1:17890/health` and, if needed, spawns the runtime sidecar (prefer `node …/dist/index.js`, else `node` + `tsx` — see `src-tauri/sidecars/README.md`). On exit it kills only the process tree it started (`taskkill /T` on Windows). Folder Browse uses the `pick_folder` command.
 
 If Rust is missing, the Vite UI still works; only `tauri dev` / `tauri build` need Rust.

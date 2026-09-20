@@ -21,7 +21,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    let message = text || `HTTP ${res.status}`;
+    try {
+      const body = JSON.parse(text) as { error?: unknown };
+      if (typeof body.error === "string" && body.error.trim()) {
+        message = body.error;
+      }
+    } catch {
+      // keep raw text when body is not JSON
+    }
+    throw new Error(message);
   }
   if (res.status === 204) {
     return undefined as T;

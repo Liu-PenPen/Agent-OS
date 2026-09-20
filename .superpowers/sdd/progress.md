@@ -14,4 +14,6 @@ Task 7: complete (commits d0dae1f..d24f211, review clean). Minor: no page tests,
 Task 8: complete (commits d24f211..78f5116, review clean). Minor: no chat component tests, abort UX — defer.
 Task 9: complete (commits 78f5116..2861c99, review clean). Minor: health timeout orphan, no full tauri E2E (MSVC) — defer.
 Task 10: complete (commits 2861c99..d314f56, review clean).
+Task 11: complete (commits d314f56..4f3bb59, review clean). Important follow-up for Task 12: api.ts parse {error} JSON for 503.
 Task 11: complete (commits d314f56..ed6afe1). Claude CLI adapter + engine pick; 503 on missing binary.
+Task 12: complete — README + acceptance checklist; api.ts 503 error parse.

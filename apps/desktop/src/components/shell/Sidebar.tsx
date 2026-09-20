@@ -1,3 +1,5 @@
+import { NavLink } from "react-router-dom";
+
 const MOCK_TOPICS = [
   {
     id: "1",
@@ -32,11 +34,17 @@ export function Sidebar() {
         <span className="muted">Workspace</span>
         <strong>ml-aos</strong>
       </div>
+      <nav className="side-nav" aria-label="Settings">
+        <NavLink to="/workspaces/new">New workspace</NavLink>
+        <NavLink to="/bots">Bots</NavLink>
+        <NavLink to="/queue">Queue</NavLink>
+        <NavLink to="/settings">Settings</NavLink>
+      </nav>
       <div className="sidebar-toolbar">
         <input type="search" placeholder="Filter topics" aria-label="Filter topics" />
-        <button type="button" className="btn-primary">
-          New Topic
-        </button>
+        <NavLink to="/" className="btn-primary nav-btn">
+          Home
+        </NavLink>
       </div>
       <ul className="topic-list">
         {MOCK_TOPICS.map((topic) => (

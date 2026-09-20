@@ -1,13 +1,40 @@
+import { Link, useNavigate } from "react-router-dom";
+
 const STAGES = ["Developing", "Testing", "Reviewing", "Done"] as const;
 
+/** Placeholder until Task 8 wires live topic.pipelineTaskId */
+const DEMO_PIPELINE_ID = "demo";
+
 export function RightPanel() {
+  const navigate = useNavigate();
+
   return (
     <aside className="right-panel">
       <section>
-        <h2>Pipeline</h2>
+        <h2>
+          <button
+            type="button"
+            className="linkish"
+            onClick={() => navigate(`/pipelines/${DEMO_PIPELINE_ID}`)}
+          >
+            Pipeline
+          </button>
+        </h2>
         <ol className="pipeline-stepper">
           {STAGES.map((stage, i) => (
-            <li key={stage} className={i === 0 ? "active" : ""}>
+            <li
+              key={stage}
+              className={i === 0 ? "active" : ""}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/pipelines/${DEMO_PIPELINE_ID}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate(`/pipelines/${DEMO_PIPELINE_ID}`);
+                }
+              }}
+            >
               <span className="step-index">{i + 1}</span>
               {stage}
             </li>
@@ -16,17 +43,19 @@ export function RightPanel() {
       </section>
       <section>
         <h2>
-          Needs you <span className="badge">1</span>
+          <Link to="/queue">
+            Needs you <span className="badge">1</span>
+          </Link>
         </h2>
         <div className="hitl-card">
           <p>Confirm theme default for new installs?</p>
           <div className="hitl-actions">
-            <button type="button" className="btn-ghost">
-              Dark
-            </button>
-            <button type="button" className="btn-primary">
-              Confirm
-            </button>
+            <Link className="btn-ghost" to="/queue">
+              Open queue
+            </Link>
+            <Link className="btn-primary" to="/queue">
+              Answer
+            </Link>
           </div>
         </div>
       </section>

@@ -4,10 +4,20 @@ import type { PipelineService } from "../services/pipeline-service.js";
 
 export function registerPipelineRoutes(
   router: {
+    get: (path: string, handler: RouteHandler) => void;
     post: (path: string, handler: RouteHandler) => void;
   },
   service: PipelineService,
 ): void {
+  router.get("/api/pipelines/:id", async (_req, res, params) => {
+    const task = await service.get(params.id);
+    if (!task) {
+      sendError(res, 404, `Pipeline not found: ${params.id}`);
+      return;
+    }
+    sendJson(res, 200, task);
+  });
+
   router.post("/api/topics/:id/dispatch", async (req, res, params) => {
     try {
       const body = await readJsonBody<{

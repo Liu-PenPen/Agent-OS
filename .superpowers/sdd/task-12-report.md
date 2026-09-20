@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Date:** 2026-09-20  
-**Commit:** `7376b28` — docs: README and phase-1 acceptance notes
+**Commit:** `8ec8ebb` — docs: README and phase-1 acceptance notes
 
 ---
 

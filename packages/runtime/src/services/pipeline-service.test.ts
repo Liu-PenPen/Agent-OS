@@ -136,4 +136,18 @@ describe("PipelineService", () => {
     const topic = await chat.getTopic(topicId);
     expect(topic!.pipelineStage).toBe("completed");
   });
+
+  it("invokes onDispatch after dispatch", async () => {
+    const seen: string[] = [];
+    pipeline.setOnDispatch((id) => seen.push(id));
+    const task = await pipeline.dispatch(topicId, { title: "Hook" });
+    expect(seen).toEqual([task.id]);
+  });
+
+  it("does not auto-advance by default (timer opt-in only)", async () => {
+    const task = await pipeline.dispatch(topicId, { title: "Stay" });
+    await new Promise((r) => setTimeout(r, 40));
+    const still = await pipeline.get(task.id);
+    expect(still?.stage).toBe("developing");
+  });
 });

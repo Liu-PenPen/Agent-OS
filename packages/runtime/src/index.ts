@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { JsonStore } from "./store/json-store.js";
 import { WorkspaceService } from "./services/workspace-service.js";
 import { BotService } from "./services/bot-service.js";
+import { BotRunService } from "./services/bot-run-service.js";
 import { ChatService } from "./services/chat-service.js";
 import { PipelineService } from "./services/pipeline-service.js";
+import { PipelineRunner } from "./services/pipeline-runner.js";
 import { ClarificationService } from "./services/clarification-service.js";
 import { createRouter } from "./http/router.js";
 import { applyCors, sendJson } from "./http/json.js";
@@ -50,6 +52,13 @@ const server = createServer(async (req, res) => {
 });
 
 const { broadcast } = attachWebSocket(server);
+const botRunService = new BotRunService(
+  store,
+  workspaceService,
+  botService,
+  settingsService,
+  broadcast,
+);
 const chatService = new ChatService(
   store,
   workspaceService,
@@ -57,8 +66,22 @@ const chatService = new ChatService(
   undefined,
   broadcast,
   settingsService,
+  botRunService,
 );
-const pipelineService = new PipelineService(store, broadcast, 5000);
+const mockAutoAdvanceMs =
+  process.env.ML_AOS_MOCK_PIPELINE_TIMER === "1" ? 5000 : undefined;
+const pipelineService = new PipelineService(
+  store,
+  broadcast,
+  mockAutoAdvanceMs,
+);
+const pipelineRunner = new PipelineRunner(
+  pipelineService,
+  botRunService,
+  store,
+  broadcast,
+);
+pipelineService.setOnDispatch((pipelineId) => pipelineRunner.start(pipelineId));
 const clarificationService = new ClarificationService(store, broadcast);
 
 const router = createRouter();

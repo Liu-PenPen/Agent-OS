@@ -18,12 +18,18 @@ export interface DispatchInput {
 
 export class PipelineService {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private onDispatch?: (pipelineId: string) => void;
 
   constructor(
     private readonly store: JsonStore,
     private readonly emit?: (event: ChatEvent) => void,
     private readonly mockAutoAdvanceMs?: number,
   ) {}
+
+  /** Wire PipelineRunner.start after construction */
+  setOnDispatch(handler: (pipelineId: string) => void): void {
+    this.onDispatch = handler;
+  }
 
   async dispatch(topicId: string, input: DispatchInput): Promise<PipelineTask> {
     const state = await this.store.load();
@@ -62,6 +68,8 @@ export class PipelineService {
     if (this.mockAutoAdvanceMs && this.mockAutoAdvanceMs > 0) {
       this.scheduleAutoAdvance(task.id);
     }
+
+    this.onDispatch?.(task.id);
 
     return task;
   }

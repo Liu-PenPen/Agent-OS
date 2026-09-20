@@ -26,6 +26,7 @@ export type ChatEvent =
 
 export class ChatService {
   private readonly adapter: CliAdapter;
+  private readonly runControllers = new Map<string, AbortController>();
 
   constructor(
     private readonly store: JsonStore,
@@ -35,6 +36,20 @@ export class ChatService {
     private readonly emit?: (event: ChatEvent) => void,
   ) {
     this.adapter = adapter ?? new MockCliAdapter();
+  }
+
+  async abort(topicId: string): Promise<{ ok: true; aborted: boolean }> {
+    const topic = await this.getTopic(topicId);
+    if (!topic) {
+      throw new Error(`Topic not found: ${topicId}`);
+    }
+    const controller = this.runControllers.get(topicId);
+    if (!controller) {
+      return { ok: true, aborted: false };
+    }
+    controller.abort();
+    this.runControllers.delete(topicId);
+    return { ok: true, aborted: true };
   }
 
   async createTopic(input: CreateTopicInput): Promise<Topic> {
@@ -124,32 +139,47 @@ export class ChatService {
       content: "",
     });
 
+    const previous = this.runControllers.get(topicId);
+    previous?.abort();
+    const controller = new AbortController();
+    this.runControllers.set(topicId, controller);
+
     let content = "";
     let clarificationMessageId: string | undefined;
-    for await (const event of this.adapter.run({
-      prompt: input.content,
-      cwd: workspace.localPath,
-      sessionId: topic.cliSessionId,
-    })) {
-      if (event.type === "text_delta") {
-        content += event.text;
-        await this.updateMessageContent(botMessage.id, content);
-      } else if (event.type === "clarification") {
-        const clarificationMsg = await this.appendClarificationMessage({
-          topicId,
-          botId: bot.id,
-          clarification: {
-            id: event.id,
-            prompt: event.prompt,
-            options: event.options,
-            status: "pending",
-          },
-        });
-        clarificationMessageId = clarificationMsg.id;
-      } else if (event.type === "done" && event.sessionId) {
-        await this.updateTopicSession(topicId, event.sessionId);
-      } else if (event.type === "error") {
-        await this.updateMessageContent(botMessage.id, `[error] ${event.message}`);
+    try {
+      for await (const event of this.adapter.run({
+        prompt: input.content,
+        cwd: workspace.localPath,
+        sessionId: topic.cliSessionId,
+        signal: controller.signal,
+      })) {
+        if (event.type === "text_delta") {
+          content += event.text;
+          await this.updateMessageContent(botMessage.id, content);
+        } else if (event.type === "clarification") {
+          const clarificationMsg = await this.appendClarificationMessage({
+            topicId,
+            botId: bot.id,
+            clarification: {
+              id: event.id,
+              prompt: event.prompt,
+              options: event.options,
+              status: "pending",
+            },
+          });
+          clarificationMessageId = clarificationMsg.id;
+        } else if (event.type === "done" && event.sessionId) {
+          await this.updateTopicSession(topicId, event.sessionId);
+        } else if (event.type === "error") {
+          await this.updateMessageContent(
+            botMessage.id,
+            `[error] ${event.message}`,
+          );
+        }
+      }
+    } finally {
+      if (this.runControllers.get(topicId) === controller) {
+        this.runControllers.delete(topicId);
       }
     }
 

@@ -10,5 +10,9 @@ Task 3: complete (commits e97fe5c..5dc0386, review clean). Minor: HTTP tests/cas
 Task 4: complete (commits 5dc0386..86e8750, review clean). Minor: no HTTP/WS IT — defer.
 Task 5: complete (commits 86e8750..c5fa876, review clean). Minor: empty bot on clarify — defer.
 Task 6: complete (commits c5fa876..d0dae1f, review clean). Minor: ThemeMode dup, theme flash — defer.
+
+Task 7: complete (commits d0dae1f..d24f211, review clean). Minor: no page tests, settings refetch, demo pipeline id — defer.
 Task 7: complete (see task-7-report.md). Minor: demo pipeline id until Task 8 — defer.
+
+Task 8: complete (see task-8-report.md). Home chat wired to mock runtime + abort endpoint.
 

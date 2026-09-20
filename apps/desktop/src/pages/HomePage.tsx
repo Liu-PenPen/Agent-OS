@@ -1,62 +1,69 @@
-const MOCK_MESSAGES = [
-  {
-    id: "m1",
-    author: "you",
-    name: "You",
-    body: "Build the desktop shell with theme tokens and a three-pane home layout.",
-  },
-  {
-    id: "m2",
-    author: "bot",
-    name: "Leader",
-    role: "CEO",
-    body: "Dispatching desktop shell + theme. TopBar will cycle dark / light / system and persist via PATCH /api/settings.",
-  },
-  {
-    id: "m3",
-    author: "bot",
-    name: "Dev",
-    role: "Developer",
-    body: "Scaffolding Vite + React + Tauri. UI available via pnpm --filter @ml-aos/desktop dev.",
-  },
-];
+import { MessageList } from "../components/chat/MessageList";
+import { Composer } from "../components/chat/Composer";
+import { useShell } from "../lib/shell-context";
 
 export function HomePage() {
+  const {
+    selectedTopic,
+    messages,
+    bots,
+    enabledBots,
+    workspace,
+    sendMessage,
+    abortTopic,
+    dispatchTopic,
+    answerClarification,
+    sending,
+    error,
+  } = useShell();
+
+  if (!workspace) {
+    return (
+      <div className="home-center">
+        <header className="topic-header">
+          <h1>No workspace</h1>
+          <p className="muted">
+            Create a workspace from the sidebar to start chatting.
+          </p>
+        </header>
+      </div>
+    );
+  }
+
+  if (!selectedTopic) {
+    return (
+      <div className="home-center">
+        <header className="topic-header">
+          <h1>{workspace.name}</h1>
+          <p className="muted">Create a topic in the sidebar to begin.</p>
+        </header>
+      </div>
+    );
+  }
+
   return (
     <div className="home-center">
       <header className="topic-header">
-        <h1>Desktop shell + theme</h1>
-        <p className="muted">ml-aos · mock engine</p>
+        <h1>{selectedTopic.title}</h1>
+        <p className="muted">
+          {workspace.name} · {selectedTopic.pipelineStage}
+          {error ? ` · ${error}` : ""}
+        </p>
       </header>
-      <div className="timeline">
-        {MOCK_MESSAGES.map((msg) => (
-          <article
-            key={msg.id}
-            className={`message ${msg.author === "you" ? "message-you" : "message-bot"}`}
-          >
-            <div className="message-meta">
-              <strong>{msg.name}</strong>
-              {msg.role ? <span className="role-badge">{msg.role}</span> : null}
-            </div>
-            <p>{msg.body}</p>
-          </article>
-        ))}
-      </div>
-      <footer className="composer">
-        <textarea
-          rows={3}
-          placeholder="Message agents… use @ to mention"
-          aria-label="Composer"
-        />
-        <div className="composer-actions">
-          <button type="button" className="btn-ghost">
-            Abort
-          </button>
-          <button type="button" className="btn-primary">
-            Send
-          </button>
-        </div>
-      </footer>
+      <MessageList
+        messages={messages}
+        bots={bots}
+        onAnswerClarification={answerClarification}
+      />
+      <Composer
+        bots={enabledBots}
+        sending={sending}
+        onSend={sendMessage}
+        onAbort={abortTopic}
+        onDispatch={() => {
+          void dispatchTopic(selectedTopic.title);
+        }}
+      />
     </div>
   );
 }

@@ -72,4 +72,14 @@ export function registerTopicRoutes(
       sendError(res, status, message);
     }
   });
+
+  router.post("/api/topics/:id/abort", async (_req, res, params) => {
+    try {
+      const result = await service.abort(params.id);
+      sendJson(res, 200, result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Bad request";
+      sendError(res, /not found/i.test(message) ? 404 : 500, message);
+    }
+  });
 }

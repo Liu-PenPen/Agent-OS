@@ -5,6 +5,7 @@ import type {
   EngineKind,
   PipelineTask,
   ThemeMode,
+  Topic,
   Workspace,
 } from "@ml-aos/shared";
 
@@ -140,6 +141,51 @@ export const api = {
     return request<PipelineTask>(`/api/pipelines/${id}/advance`, {
       method: "POST",
       body: JSON.stringify({}),
+    });
+  },
+
+  listTopics(workspaceId?: string): Promise<Topic[]> {
+    const q = workspaceId
+      ? `?workspaceId=${encodeURIComponent(workspaceId)}`
+      : "";
+    return request<Topic[]>(`/api/topics${q}`);
+  },
+
+  createTopic(input: { workspaceId: string; title?: string }): Promise<Topic> {
+    return request<Topic>("/api/topics", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  listMessages(topicId: string): Promise<ChatMessage[]> {
+    return request<ChatMessage[]>(`/api/topics/${topicId}/messages`);
+  },
+
+  sendMessage(
+    topicId: string,
+    input: { content: string; mentionBotId?: string },
+  ): Promise<ChatMessage[]> {
+    return request<ChatMessage[]>(`/api/topics/${topicId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  abortTopic(topicId: string): Promise<{ ok: true; aborted: boolean }> {
+    return request<{ ok: true; aborted: boolean }>(
+      `/api/topics/${topicId}/abort`,
+      { method: "POST", body: JSON.stringify({}) },
+    );
+  },
+
+  dispatchTopic(
+    topicId: string,
+    input: { title: string; assigneeBotIds?: string[] },
+  ): Promise<PipelineTask> {
+    return request<PipelineTask>(`/api/topics/${topicId}/dispatch`, {
+      method: "POST",
+      body: JSON.stringify(input),
     });
   },
 };

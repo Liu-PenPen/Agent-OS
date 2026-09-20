@@ -110,4 +110,10 @@ describe("ChatService", () => {
     expect(clarification!.clarification?.status).toBe("pending");
     expect(clarification!.clarification?.options).toHaveLength(2);
   });
+
+  it("abort returns ok when nothing is running", async () => {
+    const topic = await chat.createTopic({ workspaceId, title: "T" });
+    const result = await chat.abort(topic.id);
+    expect(result).toEqual({ ok: true, aborted: false });
+  });
 });

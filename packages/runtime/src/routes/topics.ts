@@ -1,6 +1,7 @@
 import type { RouteHandler } from "../http/router.js";
 import { readJsonBody, sendError, sendJson } from "../http/json.js";
 import type { ChatService } from "../services/chat-service.js";
+import { CliEngineUnavailableError } from "../cli/errors.js";
 
 export function registerTopicRoutes(
   router: {
@@ -64,6 +65,10 @@ export function registerTopicRoutes(
       sendJson(res, 201, messages);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bad request";
+      if (error instanceof CliEngineUnavailableError) {
+        sendError(res, 503, message);
+        return;
+      }
       const status = /not found|disabled/i.test(message)
         ? 404
         : /required/i.test(message)

@@ -56,6 +56,7 @@ const chatService = new ChatService(
   botService,
   undefined,
   broadcast,
+  settingsService,
 );
 const pipelineService = new PipelineService(store, broadcast, 5000);
 const clarificationService = new ClarificationService(store, broadcast);

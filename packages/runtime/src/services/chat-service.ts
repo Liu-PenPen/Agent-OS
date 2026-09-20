@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { ChatMessage, Topic } from "@ml-aos/shared";
+import type { ChatMessage, EngineKind, Topic } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
 import type { WorkspaceService } from "./workspace-service.js";
 import type { BotService } from "./bot-service.js";
-import { MockCliAdapter } from "../cli/mock-adapter.js";
+import type { SettingsService } from "./settings-service.js";
+import { resolveAdapter } from "../cli/resolve-adapter.js";
+import { CliEngineUnavailableError } from "../cli/errors.js";
 import type { CliAdapter } from "../cli/types.js";
 
 export interface CreateTopicInput {
@@ -25,7 +27,7 @@ export type ChatEvent =
     };
 
 export class ChatService {
-  private readonly adapter: CliAdapter;
+  private readonly adapterOverride?: CliAdapter;
   private readonly runControllers = new Map<string, AbortController>();
 
   constructor(
@@ -34,8 +36,16 @@ export class ChatService {
     private readonly botService: BotService,
     adapter?: CliAdapter,
     private readonly emit?: (event: ChatEvent) => void,
+    private readonly settingsService?: SettingsService,
   ) {
-    this.adapter = adapter ?? new MockCliAdapter();
+    this.adapterOverride = adapter;
+  }
+
+  private async pickAdapter(botEngine: EngineKind): Promise<CliAdapter> {
+    if (this.adapterOverride) return this.adapterOverride;
+    const settings = await this.settingsService?.get();
+    const engine = botEngine || settings?.defaultEngine || "mock";
+    return resolveAdapter(engine);
   }
 
   async abort(topicId: string): Promise<{ ok: true; aborted: boolean }> {
@@ -146,8 +156,9 @@ export class ChatService {
 
     let content = "";
     let clarificationMessageId: string | undefined;
+    const adapter = await this.pickAdapter(bot.defaultEngine);
     try {
-      for await (const event of this.adapter.run({
+      for await (const event of adapter.run({
         prompt: input.content,
         cwd: workspace.localPath,
         sessionId: topic.cliSessionId,
@@ -177,6 +188,15 @@ export class ChatService {
           );
         }
       }
+    } catch (error) {
+      if (error instanceof CliEngineUnavailableError) {
+        await this.updateMessageContent(
+          botMessage.id,
+          `[error] ${error.message}`,
+        );
+        throw error;
+      }
+      throw error;
     } finally {
       if (this.runControllers.get(topicId) === controller) {
         this.runControllers.delete(topicId);

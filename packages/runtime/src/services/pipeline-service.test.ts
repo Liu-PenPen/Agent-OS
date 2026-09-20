@@ -66,6 +66,62 @@ describe("PipelineService", () => {
     expect(running?.status).toBe("running");
   });
 
+  it("dispatch fills stage botIds from roles when assigneeBotIds omitted", async () => {
+    const bots = new BotService(store);
+    const developer = await bots.create({
+      name: "Dev",
+      role: "developer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+    const tester = await bots.create({
+      name: "QA",
+      role: "tester",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+    const reviewer = await bots.create({
+      name: "Review",
+      role: "reviewer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+
+    const task = await pipeline.dispatch(topicId, { title: "By role" });
+    expect(task.stages.find((s) => s.stage === "developing")?.botId).toBe(
+      developer.id,
+    );
+    expect(task.stages.find((s) => s.stage === "testing")?.botId).toBe(
+      tester.id,
+    );
+    expect(task.stages.find((s) => s.stage === "reviewing")?.botId).toBe(
+      reviewer.id,
+    );
+    expect(task.stages.find((s) => s.stage === "completed")?.botId).toBeUndefined();
+  });
+
+  it("dispatch uses assigneeBotIds override", async () => {
+    const bots = new BotService(store);
+    await bots.create({
+      name: "Dev",
+      role: "developer",
+      defaultEngine: "mock",
+      instructions: "",
+      enabled: true,
+    });
+
+    const task = await pipeline.dispatch(topicId, {
+      title: "Override",
+      assigneeBotIds: ["a", "b", "c"],
+    });
+    expect(task.stages.find((s) => s.stage === "developing")?.botId).toBe("a");
+    expect(task.stages.find((s) => s.stage === "testing")?.botId).toBe("b");
+    expect(task.stages.find((s) => s.stage === "reviewing")?.botId).toBe("c");
+  });
+
   it("advance moves developing → testing → reviewing → completed", async () => {
     const task = await pipeline.dispatch(topicId, { title: "Flow" });
     const after1 = await pipeline.advance(task.id);

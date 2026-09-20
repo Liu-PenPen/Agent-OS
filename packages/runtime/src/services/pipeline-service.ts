@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PipelineStage, PipelineTask, Topic } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
 import type { ChatEvent } from "./chat-service.js";
+import { resolveStageBotIds } from "./pipeline-bots.js";
 
 const STAGE_ORDER: PipelineStage[] = [
   "developing",
@@ -31,6 +32,7 @@ export class PipelineService {
       throw new Error(`Topic not found: ${topicId}`);
     }
 
+    const resolved = resolveStageBotIds(state.bots, input.assigneeBotIds);
     const now = new Date().toISOString();
     const task: PipelineTask = {
       id: randomUUID(),
@@ -39,7 +41,12 @@ export class PipelineService {
       stage: "developing",
       stages: STAGE_ORDER.map((stage, index) => ({
         stage,
-        botId: input.assigneeBotIds?.[index],
+        botId:
+          stage === "developing" ||
+          stage === "testing" ||
+          stage === "reviewing"
+            ? resolved[stage]
+            : undefined,
         status: index === 0 ? "running" : "pending",
         at: index === 0 ? now : undefined,
       })),

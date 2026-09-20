@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
 import { access, readdir } from "node:fs/promises";
 import type { Workspace } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
+import { cloneRepo } from "./git-service.js";
 
 export interface CreateWorkspaceInput {
   name: string;
@@ -28,19 +28,6 @@ async function pathIsEmpty(localPath: string): Promise<boolean> {
   }
   const entries = await readdir(localPath);
   return entries.length === 0;
-}
-
-function runGitClone(gitUrl: string, localPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("git", ["clone", gitUrl, localPath], {
-      stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`git clone exited with code ${code}`));
-    });
-  });
 }
 
 export class WorkspaceService {
@@ -127,7 +114,7 @@ export class WorkspaceService {
       throw new Error("localPath is not empty");
     }
 
-    await runGitClone(workspace.gitUrl, workspace.localPath);
+    await cloneRepo(workspace.gitUrl, workspace.localPath);
     return workspace;
   }
 }

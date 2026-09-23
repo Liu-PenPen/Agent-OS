@@ -329,6 +329,13 @@ export class TicketService {
     const project = await this.projects.get(input.projectId);
     if (!project) throw new Error(`Gitee 项目不存在: ${input.projectId}`);
 
+    const detail = await getIssueDetail(input.issueId);
+    if (String(detail.programId) !== String(project.programId)) {
+      throw new Error(
+        `工单不属于当前项目：issue programId=${detail.programId}, project programId=${project.programId}`,
+      );
+    }
+
     const result = await giteeUpdateIssueState({
       issueId: input.issueId,
       issueStateId: input.issueStateId,

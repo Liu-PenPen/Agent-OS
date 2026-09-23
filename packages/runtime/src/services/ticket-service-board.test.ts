@@ -210,6 +210,7 @@ describe("TicketService board + state APIs", () => {
       },
     });
 
+    getIssueDetail.mockResolvedValue(fakeDetail());
     giteeUpdateIssueState.mockResolvedValue({
       stateId: 10,
       stateTitle: "已完成",
@@ -221,6 +222,7 @@ describe("TicketService board + state APIs", () => {
       issueStateId: 10,
     });
     expect(synced).toEqual({ stateId: 10, stateTitle: "已完成" });
+    expect(getIssueDetail).toHaveBeenCalledWith(42);
     expect(giteeUpdateIssueState).toHaveBeenCalledWith({
       issueId: 42,
       issueStateId: 10,
@@ -230,5 +232,18 @@ describe("TicketService board + state APIs", () => {
     expect(row?.gitee?.lastSyncedStateId).toBe(10);
     expect(row?.gitee?.lastSyncedStateTitle).toBe("已完成");
     expect(row?.gitee?.lastSyncedAt).toBeTruthy();
+  });
+
+  it("updateIssueState rejects issue from another program", async () => {
+    getIssueDetail.mockResolvedValue(fakeDetail({ programId: "999999" }));
+
+    await expect(
+      ticketService.updateIssueState({
+        projectId: "818309",
+        issueId: 42,
+        issueStateId: 10,
+      }),
+    ).rejects.toThrow(/不属于当前项目/);
+    expect(giteeUpdateIssueState).not.toHaveBeenCalled();
   });
 });

@@ -172,6 +172,21 @@ describe("PipelineService", () => {
     });
   });
 
+  it("advance to testing updates board row stage", async () => {
+    const task = await pipeline.dispatch(topicId, { title: "Board stage" });
+    const after = await pipeline.advance(task.id);
+    expect(after.stage).toBe("testing");
+
+    const row = await taskBoard.findByTopicId(topicId);
+    expect(row).toMatchObject({
+      id: boardTaskIdForPipeline(task.id),
+      status: "running",
+      stage: "testing",
+      pipelineId: task.id,
+      topicId,
+    });
+  });
+
   it("advance to completed marks board row completed", async () => {
     const task = await pipeline.dispatch(topicId, { title: "Board done" });
     await pipeline.advance(task.id);
@@ -198,15 +213,20 @@ describe("PipelineService", () => {
       status: "running",
       source: "gitee",
       topicId,
-      stage: "developing",
+      stage: "idle",
     });
 
     const task = await pipeline.dispatch(topicId, { title: "Linked" });
     const afterDispatch = await taskBoard.findByTopicId(topicId);
     expect(afterDispatch?.id).toBe("gitee:prog:I1");
     expect(afterDispatch?.status).toBe("running");
+    expect(afterDispatch?.stage).toBe("developing");
+    expect(afterDispatch?.pipelineId).toBe(task.id);
 
     await pipeline.advance(task.id);
+    const afterTesting = await taskBoard.findByTopicId(topicId);
+    expect(afterTesting?.stage).toBe("testing");
+
     await pipeline.advance(task.id);
     await pipeline.advance(task.id);
 

@@ -158,8 +158,11 @@ export class PipelineService {
     if (emitted === "completed") {
       this.clearAutoAdvance(id);
       await this.syncBoardCompleted(taskOut);
-    } else if (this.mockAutoAdvanceMs && this.mockAutoAdvanceMs > 0) {
-      this.scheduleAutoAdvance(id);
+    } else {
+      await this.syncBoardStage(taskOut);
+      if (this.mockAutoAdvanceMs && this.mockAutoAdvanceMs > 0) {
+        this.scheduleAutoAdvance(id);
+      }
     }
 
     return taskOut;
@@ -168,7 +171,19 @@ export class PipelineService {
   private async ensureBoardRunning(task: PipelineTask): Promise<void> {
     if (!this.taskBoard) return;
     const byTopic = await this.taskBoard.findByTopicId(task.topicId);
-    if (byTopic) return;
+    if (byTopic) {
+      await this.taskBoard.upsert({
+        id: byTopic.id,
+        title: byTopic.title,
+        status: byTopic.status === "completed" ? byTopic.status : "running",
+        source: byTopic.source,
+        topicId: task.topicId,
+        pipelineId: task.id,
+        stage: task.stage,
+        botId: lastStageBotId(task),
+      });
+      return;
+    }
     await this.taskBoard.upsert({
       id: boardTaskIdForPipeline(task.id),
       title: task.title,
@@ -176,6 +191,22 @@ export class PipelineService {
       source: "pipeline",
       topicId: task.topicId,
       pipelineId: task.id,
+      stage: task.stage,
+      botId: lastStageBotId(task),
+    });
+  }
+
+  private async syncBoardStage(task: PipelineTask): Promise<void> {
+    if (!this.taskBoard) return;
+    const byTopic = await this.taskBoard.findByTopicId(task.topicId);
+    if (!byTopic) return;
+    await this.taskBoard.upsert({
+      id: byTopic.id,
+      title: byTopic.title,
+      status: byTopic.status,
+      source: byTopic.source,
+      topicId: task.topicId,
+      pipelineId: byTopic.pipelineId ?? task.id,
       stage: task.stage,
       botId: lastStageBotId(task),
     });

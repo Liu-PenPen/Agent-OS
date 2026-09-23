@@ -56,6 +56,29 @@ async function emptyState(dataDir: string): Promise<AppState> {
   };
 }
 
+function isRetryableRmError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err.code === "ENOTEMPTY" || err.code === "EBUSY" || err.code === "EPERM")
+  );
+}
+
+async function rmTempDir(dir: string): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await rm(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      if (!isRetryableRmError(err) || attempt === 2) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+}
+
 function fakeDetail(overrides?: Partial<GiteeIssueDetail>): GiteeIssueDetail {
   return {
     id: 42,
@@ -152,7 +175,7 @@ describe("TicketService board + state APIs", () => {
   });
 
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    await rmTempDir(dir);
   });
 
   it("dispatchToCeo upserts a running board row", async () => {

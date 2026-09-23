@@ -183,6 +183,7 @@ export function Sidebar() {
           待确认
           {pendingCount > 0 ? <span className="badge">{pendingCount}</span> : null}
         </NavLink>
+        <NavLink to="/board">任务看板</NavLink>
         <NavLink to="/bots">智能体</NavLink>
         <NavLink to="/settings">设置</NavLink>
       </nav>

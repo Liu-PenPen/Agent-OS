@@ -6,7 +6,9 @@ import { WorkspaceFormPage } from "./pages/WorkspaceFormPage";
 import { BotSettingsPage } from "./pages/BotSettingsPage";
 import { AppSettingsPage } from "./pages/AppSettingsPage";
 import { ClarificationQueuePage } from "./pages/ClarificationQueuePage";
+import { TaskBoardPage } from "./pages/TaskBoardPage";
 import { PipelineDetailPage } from "./pages/PipelineDetailPage";
+import { ShellProvider } from "./lib/shell-context";
 import { api } from "./lib/api";
 import { applyTheme, type ThemeMode } from "./lib/theme";
 import "./styles/tokens.css";
@@ -47,22 +49,26 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route
-          element={
-            <AppLayout theme={theme} onThemeChange={handleThemeChange} />
-          }
-        >
-          <Route index element={<HomePage />} />
-          <Route path="workspaces/new" element={<WorkspaceFormPage />} />
-          <Route path="workspaces/:id" element={<WorkspaceFormPage />} />
-          <Route path="bots" element={<BotSettingsPage />} />
-          <Route path="settings" element={<AppSettingsPage />} />
-          <Route path="queue" element={<ClarificationQueuePage />} />
-          <Route path="pipelines/:id" element={<PipelineDetailPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+      <ShellProvider>
+        <Routes>
+          <Route
+            element={
+              <AppLayout theme={theme} onThemeChange={handleThemeChange} />
+            }
+          >
+            <Route index element={<HomePage />} />
+            <Route path="workspace" element={<HomePage />} />
+            <Route path="workspaces/new" element={<WorkspaceFormPage />} />
+            <Route path="workspaces/:id" element={<WorkspaceFormPage />} />
+            <Route path="bots" element={<BotSettingsPage />} />
+            <Route path="settings" element={<AppSettingsPage />} />
+            <Route path="queue" element={<ClarificationQueuePage />} />
+            <Route path="board" element={<TaskBoardPage />} />
+            <Route path="pipelines/:id" element={<PipelineDetailPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </ShellProvider>
     </BrowserRouter>
   );
 }

@@ -324,6 +324,197 @@
   accent-color: var(--accent);
 }
 
+/* ==========================================================================
+   Task Board
+   ========================================================================== */
+
+.board-health {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.board-health.is-ok {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+.board-health.is-warn {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0 0 18px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.board-summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.board-summary dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.board-summary dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.board-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.board-list-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.board-filters button {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.board-filters button:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.board-filters button.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.board-task-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.board-task-title {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.board-task-meta {
+  font-size: 12px;
+}
+
+.board-sync-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+
+.board-detail {
+  max-width: none;
+  position: sticky;
+  top: 0;
+}
+
+.board-detail-fields {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.board-detail-fields > div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 13px;
+}
+
+.board-detail-fields dt {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.board-detail-fields dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.board-detail-fields a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.board-detail-fields a:hover {
+  text-decoration: underline;
+}
+
+.board-detail-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+button.linkish {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: none;
+}
+
+button.linkish:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 900px) {
   .split-pane {
     grid-template-columns: 1fr;
@@ -332,5 +523,13 @@
   .settings-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .board-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .board-detail {
+    position: static;
   }
 }

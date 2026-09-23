@@ -5,6 +5,11 @@ import type { ChatEvent } from "./chat-service.js";
 import type { BotRunService } from "./bot-run-service.js";
 import type { PipelineService } from "./pipeline-service.js";
 import { STAGE_ROLES } from "./pipeline-bots.js";
+import type { AppControl } from "./app-control.js";
+import {
+  boardTaskIdForPipeline,
+  type TaskBoardService,
+} from "./task-board-service.js";
 
 const ACTIVE_STAGES = ["developing", "testing", "reviewing"] as const;
 type ActiveStage = (typeof ACTIVE_STAGES)[number];
@@ -30,12 +35,21 @@ function buildStagePrompt(input: {
   localPath: string;
 }): string {
   const role = STAGE_ROLES[input.stage];
+  const stageHints: Record<ActiveStage, string> = {
+    developing:
+      "完成本阶段开发：按已确认规格实现变更，做最小必要验证，并总结改动与风险。",
+    testing:
+      "完成本阶段测试：对照验收标准验证交付物，列出通过/失败项；失败须可复现。",
+    reviewing:
+      "完成本阶段审查：独立审查变更，明确给出 REVIEW_PASSED 或 REVIEW_FAILED 及理由。",
+  };
   return [
-    "[ML AOS pipeline]",
-    `Stage: ${input.stage}`,
-    `Task: ${input.title}`,
-    `Workspace: ${input.localPath}`,
-    `Instructions: You are the ${role} bot. Complete this stage for the task. Be concrete. When done, summarize what you did.`,
+    "[ML AOS 流水线]",
+    `阶段：${input.stage}（角色：${role}）`,
+    `任务：${input.title}`,
+    `工作区：${input.localPath}`,
+    `要求：${stageHints[input.stage]}`,
+    "完成后用简洁中文总结本阶段结论。",
   ].join("\n");
 }
 
@@ -47,6 +61,8 @@ export class PipelineRunner {
     private botRun: BotRunService,
     private store: JsonStore,
     private emit?: (e: ChatEvent) => void,
+    private control?: AppControl,
+    private taskBoard?: TaskBoardService,
   ) {}
 
   /** Fire-and-forget after dispatch */
@@ -201,9 +217,81 @@ export class PipelineRunner {
       return;
     }
 
-    const excerpt = await this.messageExcerpt(result.messageId, 500);
-    await this.setStageDetail(pipelineId, excerpt);
+    const excerpt = await this.messageExcerpt(result.messageId, 1500);
+    const gate = this.control
+      ? await this.control.inspectStage({
+          pipelineId,
+          topicId: task.topicId,
+          stage: task.stage,
+          botId,
+          excerpt,
+          workspacePath: workspace.localPath,
+        })
+      : "continue";
+    if (gate === "pause") {
+      this.pausedPipelines.add(pipelineId);
+      await this.setStageDetail(pipelineId, excerpt.slice(0, 500));
+      return;
+    }
+    if (gate === "bounce") {
+      await this.rewindToDeveloper(pipelineId, excerpt, false);
+      return;
+    }
+    if (gate === "block") {
+      await this.markFailed(pipelineId, "打回开发已达上限");
+      return;
+    }
+    await this.setStageDetail(pipelineId, excerpt.slice(0, 500));
     await this.pipelines.advance(pipelineId);
+  }
+
+  async continueAfterHuman(topicId: string): Promise<void> {
+    const state = await this.store.load();
+    const topic = state.topics.find((item) => item.id === topicId);
+    if (!topic?.pipelineTaskId) return;
+    const pipelineId = topic.pipelineTaskId;
+    if (!this.pausedPipelines.has(pipelineId)) return;
+    this.pausedPipelines.delete(pipelineId);
+    await this.pipelines.advance(pipelineId);
+    await this.runUntilSettled(pipelineId);
+  }
+
+  async rewindToDeveloper(
+    pipelineId: string,
+    evidence: string,
+    chain = true,
+  ): Promise<void> {
+    this.pausedPipelines.delete(pipelineId);
+    let topicId = "";
+    await this.store.transact((state) => {
+      const task = state.pipelines.find((item) => item.id === pipelineId);
+      if (!task || task.stage === "completed" || task.stage === "blocked") return;
+      topicId = task.topicId;
+      task.stage = "developing";
+      for (const stage of task.stages) {
+        if (stage.stage === "developing") {
+          stage.status = "running";
+          stage.detail = evidence.slice(0, 500);
+          stage.at = new Date().toISOString();
+        } else if (stage.stage === "testing" || stage.stage === "reviewing") {
+          stage.status = "pending";
+          stage.detail = undefined;
+        }
+      }
+      const topic = state.topics.find((item) => item.id === task.topicId);
+      if (topic) topic.pipelineStage = "developing";
+    });
+    if (!topicId) return;
+    await this.appendSystemMessage(
+      topicId,
+      `打回开发。证据：${evidence.slice(0, 400)}`,
+    );
+    this.emit?.({
+      type: "pipeline.update",
+      topicId,
+      pipelineStage: "developing",
+    });
+    if (chain) await this.runUntilSettled(pipelineId);
   }
 
   private async runUntilSettled(pipelineId: string): Promise<void> {
@@ -240,14 +328,14 @@ export class PipelineRunner {
     pipelineId: string,
     detail: string,
   ): Promise<void> {
-    const state = await this.store.load();
-    const task = state.pipelines.find((p) => p.id === pipelineId);
-    if (!task) return;
-    const stageEntry = task.stages.find((s) => s.stage === task.stage);
-    if (stageEntry) {
-      stageEntry.detail = detail;
-    }
-    await this.store.save(state);
+    await this.store.transact((state) => {
+      const task = state.pipelines.find((p) => p.id === pipelineId);
+      if (!task) return;
+      const stageEntry = task.stages.find((s) => s.stage === task.stage);
+      if (stageEntry) {
+        stageEntry.detail = detail;
+      }
+    });
   }
 
   private async markFailed(
@@ -256,37 +344,75 @@ export class PipelineRunner {
   ): Promise<void> {
     this.pausedPipelines.delete(pipelineId);
 
-    const state = await this.store.load();
-    const task = state.pipelines.find((p) => p.id === pipelineId);
-    if (!task) return;
-    if (task.stage === "blocked") return;
+    let topicId: string | undefined;
+    let title: string | undefined;
+    let botId: string | undefined;
+    let alreadyBlocked = false;
+    await this.store.transact((state) => {
+      const task = state.pipelines.find((p) => p.id === pipelineId);
+      if (!task) return;
+      if (task.stage === "blocked") {
+        alreadyBlocked = true;
+        return;
+      }
 
-    const stageEntry = task.stages.find((s) => s.stage === task.stage);
-    if (stageEntry) {
-      stageEntry.status = "failed";
-      stageEntry.detail = detail;
-      stageEntry.at = new Date().toISOString();
-    }
+      const stageEntry = task.stages.find((s) => s.stage === task.stage);
+      if (stageEntry) {
+        stageEntry.status = "failed";
+        stageEntry.detail = detail;
+        stageEntry.at = new Date().toISOString();
+        botId = stageEntry.botId;
+      }
 
-    task.stage = "blocked";
-    const topic = state.topics.find((t) => t.id === task.topicId);
-    if (topic) {
-      topic.pipelineStage = "blocked";
-    }
+      task.stage = "blocked";
+      title = task.title;
+      const topic = state.topics.find((t) => t.id === task.topicId);
+      if (topic) {
+        topic.pipelineStage = "blocked";
+      }
+      topicId = task.topicId;
+    });
 
-    await this.store.save(state);
+    if (!topicId || alreadyBlocked) return;
     this.emit?.({
       type: "pipeline.update",
-      topicId: task.topicId,
+      topicId,
       pipelineStage: "blocked",
+    });
+    await this.syncBoardFailed(pipelineId, topicId, title ?? pipelineId, botId);
+  }
+
+  private async syncBoardFailed(
+    pipelineId: string,
+    topicId: string,
+    title: string,
+    botId?: string,
+  ): Promise<void> {
+    if (!this.taskBoard) return;
+    const byTopic = await this.taskBoard.findByTopicId(topicId);
+    const id = byTopic?.id ?? boardTaskIdForPipeline(pipelineId);
+    if (!byTopic) {
+      await this.taskBoard.upsert({
+        id,
+        title,
+        status: "running",
+        source: "pipeline",
+        topicId,
+        pipelineId,
+        stage: "blocked",
+        botId,
+      });
+    }
+    await this.taskBoard.markFailed(id, "pipeline_blocked", {
+      stage: "blocked",
+      botId,
     });
   }
 
   private async appendSystemMessage(
     topicId: string,
     content: string,
-  ): Promise<ChatMessage> {
-    const state = await this.store.load();
+  ): Promise<ChatMessage | undefined> {
     const message: ChatMessage = {
       id: randomUUID(),
       topicId,
@@ -294,8 +420,13 @@ export class PipelineRunner {
       content,
       createdAt: new Date().toISOString(),
     };
-    state.messages.push(message);
-    await this.store.save(state);
+    let saved = false;
+    await this.store.transact((state) => {
+      if (!state.topics.some((t) => t.id === topicId)) return;
+      state.messages.push(message);
+      saved = true;
+    });
+    if (!saved) return;
     this.emit?.({ type: "message.upsert", message });
     return message;
   }

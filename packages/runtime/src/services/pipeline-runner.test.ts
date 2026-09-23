@@ -10,6 +10,10 @@ import { ChatService } from "./chat-service.js";
 import { BotRunService } from "./bot-run-service.js";
 import { PipelineService } from "./pipeline-service.js";
 import { PipelineRunner } from "./pipeline-runner.js";
+import {
+  TaskBoardService,
+  boardTaskIdForPipeline,
+} from "./task-board-service.js";
 import type { AppState } from "../app-state.js";
 import type { BotRunRequest, BotRunResult } from "./bot-run-service.js";
 import type { CliAdapter } from "../cli/types.js";
@@ -25,7 +29,7 @@ async function emptyState(dataDir: string): Promise<AppState> {
   return {
     settings: {
       theme: "dark",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       dataDir,
       notifications: true,
     },
@@ -58,6 +62,7 @@ describe("PipelineRunner", () => {
   let chat: ChatService;
   let pipelines: PipelineService;
   let runner: PipelineRunner;
+  let taskBoard: TaskBoardService;
   let topicId: string;
 
   beforeEach(async () => {
@@ -77,8 +82,16 @@ describe("PipelineRunner", () => {
       fastMockAdapter,
     );
     chat = new ChatService(store, workspaceService, botService);
-    pipelines = new PipelineService(store);
-    runner = new PipelineRunner(pipelines, botRun, store);
+    taskBoard = new TaskBoardService(dir);
+    pipelines = new PipelineService(store, undefined, undefined, taskBoard);
+    runner = new PipelineRunner(
+      pipelines,
+      botRun,
+      store,
+      undefined,
+      undefined,
+      taskBoard,
+    );
 
     const workspace = await workspaceService.create({
       name: "demo",
@@ -95,21 +108,21 @@ describe("PipelineRunner", () => {
     await botService.create({
       name: "Dev",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "QA",
       role: "tester",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "Review",
       role: "reviewer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
@@ -125,7 +138,7 @@ describe("PipelineRunner", () => {
 
     const msgs = await chat.listMessages(topicId);
     expect(
-      msgs.some((m) => m.author === "system" && m.content.includes("▶ Stage")),
+      msgs.some((m) => m.author === "system" && m.content.includes("\u25b6 Stage")),
     ).toBe(true);
     expect(msgs.filter((m) => m.author === "bot").length).toBeGreaterThanOrEqual(
       3,
@@ -136,21 +149,21 @@ describe("PipelineRunner", () => {
     await botService.create({
       name: "Dev",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "QA",
       role: "tester",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "Review",
       role: "reviewer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
@@ -164,7 +177,14 @@ describe("PipelineRunner", () => {
       abort: async () => ({ ok: true as const, aborted: false }),
     } as BotRunService;
 
-    runner = new PipelineRunner(pipelines, failingRun, store);
+    runner = new PipelineRunner(
+      pipelines,
+      failingRun,
+      store,
+      undefined,
+      undefined,
+      taskBoard,
+    );
 
     const task = await pipelines.dispatch(topicId, { title: "Will fail" });
     await runner.runStage(task.id);
@@ -176,13 +196,24 @@ describe("PipelineRunner", () => {
 
     const topic = await chat.getTopic(topicId);
     expect(topic?.pipelineStage).toBe("blocked");
+
+    const rows = await taskBoard.list({ status: "failed" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: boardTaskIdForPipeline(task.id),
+      status: "failed",
+      failureReason: "pipeline_blocked",
+      stage: "blocked",
+      topicId,
+      pipelineId: task.id,
+    });
   });
 
   it("does not advance when clarification is pending", async () => {
     const developer = await botService.create({
       name: "Dev",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
@@ -215,21 +246,21 @@ describe("PipelineRunner", () => {
     await botService.create({
       name: "Dev",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "QA",
       role: "tester",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "Review",
       role: "reviewer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
@@ -298,21 +329,21 @@ describe("PipelineRunner", () => {
     await botService.create({
       name: "Dev",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "QA",
       role: "tester",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
     await botService.create({
       name: "Review",
       role: "reviewer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });

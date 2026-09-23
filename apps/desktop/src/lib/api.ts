@@ -1,23 +1,37 @@
 import type {
   AppSettings,
+  AuthResponse,
   BotConfig,
   ChatMessage,
   EngineKind,
   PipelineTask,
   ThemeMode,
   Topic,
+  User,
   Workspace,
 } from "@ml-aos/shared";
+import type {
+  BoardSummary,
+  BoardTask,
+  BoardTaskStatus,
+  TicketIssueState,
+  TicketIssueStateUpdate,
+} from "../components/tickets/board-types";
 
 const BASE_URL = "http://127.0.0.1:17890";
 
+let authToken: string | null =
+  typeof window !== "undefined" ? localStorage.getItem("ml_aos_token") : null;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -52,12 +66,53 @@ export type CreateBotInput = {
   defaultEngine: EngineKind;
   instructions: string;
   enabled: boolean;
+  skills?: string[];
 };
 
 export type UpdateBotInput = Partial<CreateBotInput>;
 
 export const api = {
   baseUrl: BASE_URL,
+
+  setToken(token: string | null) {
+    authToken = token;
+    if (typeof window !== "undefined") {
+      if (token) {
+        localStorage.setItem("ml_aos_token", token);
+      } else {
+        localStorage.removeItem("ml_aos_token");
+      }
+    }
+  },
+
+  getToken(): string | null {
+    return authToken;
+  },
+
+  register(input: {
+    username: string;
+    email: string;
+    password: string;
+  }): Promise<AuthResponse> {
+    return request<AuthResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  login(input: {
+    identifier: string;
+    password: string;
+  }): Promise<AuthResponse> {
+    return request<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  getMe(): Promise<User> {
+    return request<User>("/api/auth/me");
+  },
 
   getSettings(): Promise<AppSettings> {
     return request<AppSettings>("/api/settings");
@@ -125,6 +180,10 @@ export const api = {
     return request<void>(`/api/bots/${id}`, { method: "DELETE" });
   },
 
+  seedBotTeam(): Promise<BotConfig[]> {
+    return request<BotConfig[]>("/api/bots/seed-team", { method: "POST" });
+  },
+
   listClarifications(
     status?: "pending" | "answered",
   ): Promise<ChatMessage[]> {
@@ -146,13 +205,6 @@ export const api = {
     return request<PipelineTask>(`/api/pipelines/${id}`);
   },
 
-  advancePipeline(id: string): Promise<PipelineTask> {
-    return request<PipelineTask>(`/api/pipelines/${id}/advance`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-  },
-
   listTopics(workspaceId?: string): Promise<Topic[]> {
     const q = workspaceId
       ? `?workspaceId=${encodeURIComponent(workspaceId)}`
@@ -165,6 +217,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     });
+  },
+
+  deleteTopic(topicId: string): Promise<void> {
+    return request<void>(`/api/topics/${topicId}`, { method: "DELETE" });
   },
 
   listMessages(topicId: string): Promise<ChatMessage[]> {
@@ -188,11 +244,231 @@ export const api = {
     );
   },
 
-  dispatchTopic(
+  answerControl(
     topicId: string,
-    input: { title: string; assigneeBotIds?: string[] },
-  ): Promise<PipelineTask> {
-    return request<PipelineTask>(`/api/topics/${topicId}/dispatch`, {
+    body: {
+      token: string;
+      action: "clarification" | "spec" | "approval" | "visual";
+      answer?: string;
+      decision?: "approved" | "rejected" | "false_positive" | "confirmed";
+    },
+  ): Promise<{ ok: true }> {
+    return request<{ ok: true }>(`/api/topics/${topicId}/controls`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  listSchedules(): Promise<
+    Array<{
+      id: string;
+      targetBotId: string;
+      prompt: string;
+      status: string;
+      nextRunAt?: string;
+      lastRunAt?: string;
+    }>
+  > {
+    return request("/api/schedules");
+  },
+
+  manageSchedule(requestBody: Record<string, unknown>): Promise<{ notice: string }> {
+    return request("/api/schedules/manage", {
+      method: "POST",
+      body: JSON.stringify({ request: requestBody }),
+    });
+  },
+
+  ticketsStatus(): Promise<{ configured: boolean; projectsPath: string }> {
+    return request("/api/tickets/status");
+  },
+
+  listTicketProjects(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      programId: string;
+      ident?: string;
+      localPath?: string;
+      defaultEngine: "claude" | "codex";
+      cast: Array<"ceo" | "product" | "developer" | "tester" | "reviewer">;
+      testBaseUrl?: string;
+      testStartCommand?: string;
+    }>
+  > {
+    return request("/api/tickets/projects");
+  },
+
+  updateTicketProject(
+    id: string,
+    patch: {
+      localPath?: string;
+      defaultEngine?: "claude" | "codex";
+      cast?: Array<"ceo" | "product" | "developer" | "tester" | "reviewer">;
+      testBaseUrl?: string;
+      testStartCommand?: string;
+    },
+  ): Promise<{
+    id: string;
+    name: string;
+    programId: string;
+    ident?: string;
+    localPath?: string;
+    defaultEngine: "claude" | "codex";
+    cast: Array<"ceo" | "product" | "developer" | "tester" | "reviewer">;
+    testBaseUrl?: string;
+    testStartCommand?: string;
+  }> {
+    return request(`/api/tickets/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+
+  listTicketTodos(
+    projectId: string,
+    options?: { all?: boolean },
+  ): Promise<
+    Array<{
+      id: number;
+      ident: string;
+      title: string;
+      stateTitle: string;
+      sprintId?: number;
+      sprintTitle: string;
+      programId: string;
+      url: string;
+      priority: string;
+      priorityRank: number;
+      topicId?: string;
+      pipelineStage?: string;
+    }>
+  > {
+    const q = options?.all ? "?all=1" : "";
+    return request(
+      `/api/tickets/projects/${encodeURIComponent(projectId)}/todos${q}`,
+    );
+  },
+
+  getTicketDetail(
+    projectId: string,
+    issueKey: string | number,
+  ): Promise<{
+    id: number;
+    ident: string;
+    title: string;
+    stateTitle: string;
+    sprintId?: number;
+    sprintTitle: string;
+    programId: string;
+    url: string;
+    priority: string;
+    priorityRank: number;
+    description: string;
+    authorName: string;
+    planStartedAt?: string;
+    deadline?: string;
+    imageUrls: string[];
+    topicId?: string;
+    pipelineStage?: string;
+  }> {
+    return request(
+      `/api/tickets/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(String(issueKey))}`,
+    );
+  },
+
+  dispatchTicket(input: {
+    projectId: string;
+    issueId: number;
+    workspaceId?: string;
+    note?: string;
+  }): Promise<{ topicId: string; botId: string }> {
+    return request("/api/tickets/dispatch", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  listTicketIssueStates(
+    projectId: string,
+    issueKey: string | number,
+  ): Promise<TicketIssueState[]> {
+    return request(
+      `/api/tickets/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(String(issueKey))}/states`,
+    );
+  },
+
+  updateTicketIssueState(
+    projectId: string,
+    issueKey: string | number,
+    issueStateId: number,
+  ): Promise<TicketIssueStateUpdate> {
+    return request(
+      `/api/tickets/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(String(issueKey))}/state`,
+      {
+        method: "POST",
+        body: JSON.stringify({ issueStateId }),
+      },
+    );
+  },
+
+  boardTasks(status?: BoardTaskStatus): Promise<BoardTask[]> {
+    const q = status ? `?status=${status}` : "";
+    return request<BoardTask[]>(`/api/board/tasks${q}`);
+  },
+
+  boardSummary(): Promise<BoardSummary> {
+    return request<BoardSummary>("/api/board/summary");
+  },
+
+  listAcceptance(topicId: string): Promise<
+    Array<{
+      id: string;
+      topicId: string;
+      verdict: "pass" | "fail" | "skip";
+      summary: string;
+      at: string;
+      source: string;
+      checks: Array<{
+        id: string;
+        title: string;
+        status: "pass" | "fail" | "skip";
+        detail?: string;
+      }>;
+      baseURL?: string;
+      skipReason?: string;
+    }>
+  > {
+    return request(`/api/topics/${encodeURIComponent(topicId)}/acceptance`);
+  },
+
+  latestAcceptance(topicId: string): Promise<{
+    id: string;
+    topicId: string;
+    verdict: "pass" | "fail" | "skip";
+    summary: string;
+    at: string;
+    source: string;
+    checks: Array<{
+      id: string;
+      title: string;
+      status: "pass" | "fail" | "skip";
+      detail?: string;
+    }>;
+    baseURL?: string;
+    skipReason?: string;
+  } | null> {
+    return request(
+      `/api/topics/${encodeURIComponent(topicId)}/acceptance/latest`,
+    );
+  },
+
+  runAcceptanceSuite(input: {
+    topicId: string;
+    botId?: string;
+    baseURL?: string;
+  }): Promise<unknown> {
+    return request("/api/acceptance/run", {
       method: "POST",
       body: JSON.stringify(input),
     });

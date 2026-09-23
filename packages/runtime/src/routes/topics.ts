@@ -7,6 +7,7 @@ export function registerTopicRoutes(
   router: {
     get: (path: string, handler: RouteHandler) => void;
     post: (path: string, handler: RouteHandler) => void;
+    delete: (path: string, handler: RouteHandler) => void;
   },
   service: ChatService,
 ): void {
@@ -75,6 +76,17 @@ export function registerTopicRoutes(
           ? 400
           : 500;
       sendError(res, status, message);
+    }
+  });
+
+  router.delete("/api/topics/:id", async (_req, res, params) => {
+    try {
+      await service.deleteTopic(params.id);
+      res.writeHead(204);
+      res.end();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Bad request";
+      sendError(res, /not found/i.test(message) ? 404 : 500, message);
     }
   });
 

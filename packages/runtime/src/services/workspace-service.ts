@@ -3,6 +3,7 @@ import { access, readdir } from "node:fs/promises";
 import type { Workspace } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
 import { cloneRepo } from "./git-service.js";
+import { seedBundledSkills } from "./skill-seed.js";
 
 export interface CreateWorkspaceInput {
   name: string;
@@ -55,6 +56,11 @@ export class WorkspaceService {
     };
     state.workspaces.push(workspace);
     await this.store.save(state);
+    try {
+      await seedBundledSkills(workspace.localPath);
+    } catch {
+      // workspace path may not exist yet; startup / seed-team can retry
+    }
     return workspace;
   }
 
@@ -83,6 +89,7 @@ export class WorkspaceService {
       for (const topic of state.topics) {
         if (topic.workspaceId === id) {
           topic.cliSessionId = undefined;
+          topic.cliSessions = {};
         }
       }
     }

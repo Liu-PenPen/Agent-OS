@@ -5,6 +5,7 @@ import type { ChildProcess } from "node:child_process";
 import {
   ClaudeCliAdapter,
   parseClaudeStdoutLine,
+  promptInputForPlatform,
   resolveClaudeCommand,
   type SpawnFn,
 } from "./claude-adapter.js";
@@ -21,10 +22,14 @@ function fakeChild(options: {
 }): ChildProcess {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
+  const stdin = {
+    end: vi.fn(),
+  };
   const child = new EventEmitter() as ChildProcess & EventEmitter;
   Object.assign(child, {
     stdout,
     stderr,
+    stdin,
     pid: 4242,
     kill: vi.fn(),
   });
@@ -51,6 +56,19 @@ function fakeChild(options: {
 }
 
 describe("parseClaudeStdoutLine", () => {
+  it("maps a partial tool start before the tool finishes", () => {
+    const line = JSON.stringify({
+      type: "stream_event",
+      event: {
+        type: "content_block_start",
+        content_block: { type: "tool_use", name: "Glob", input: {} },
+      },
+    });
+    expect(parseClaudeStdoutLine(line)).toEqual([
+      { type: "tool", name: "Glob", input: {} },
+    ]);
+  });
+
   it("maps assistant text blocks to text_delta", () => {
     const line = JSON.stringify({
       type: "assistant",
@@ -75,10 +93,50 @@ describe("parseClaudeStdoutLine", () => {
     ]);
   });
 
+  it("maps assistant usage to a usage event", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        usage: {
+          input_tokens: 27000,
+          output_tokens: 500,
+          cache_read_input_tokens: 300,
+        },
+        content: [{ type: "tool_use", name: "Read", input: { file_path: "a.ts" } }],
+      },
+    });
+    expect(parseClaudeStdoutLine(line)).toEqual([
+      { type: "usage", usedTokens: 27800 },
+      { type: "tool", name: "Read", input: { file_path: "a.ts" } },
+    ]);
+  });
+
+  it("maps result model usage including the context window", () => {
+    const line = JSON.stringify({
+      type: "result",
+      result: "Done",
+      session_id: "sess-1",
+      usage: { input_tokens: 1000, output_tokens: 200 },
+      modelUsage: { "claude-sonnet": { contextWindow: 200000 } },
+    });
+    expect(parseClaudeStdoutLine(line)).toEqual([
+      { type: "usage", usedTokens: 1200, contextWindowTokens: 200000 },
+      { type: "text_delta", text: "Done" },
+      { type: "done", sessionId: "sess-1" },
+    ]);
+  });
+
   it("treats non-JSON as text_delta", () => {
     expect(parseClaudeStdoutLine("plain")).toEqual([
       { type: "text_delta", text: "plain\n" },
     ]);
+  });
+});
+
+describe("promptInputForPlatform", () => {
+  it("uses stdin on Windows and argument elsewhere", () => {
+    expect(promptInputForPlatform("win32")).toBe("stdin");
+    expect(promptInputForPlatform("linux")).toBe("argument");
   });
 });
 
@@ -120,7 +178,11 @@ describe("ClaudeCliAdapter", () => {
       }),
     );
 
-    const adapter = new ClaudeCliAdapter(spawnFn, "C:\\fake\\claude.exe");
+    const adapter = new ClaudeCliAdapter(
+      spawnFn,
+      "C:\\fake\\claude.exe",
+      "linux",
+    );
     const chunks: string[] = [];
     let sessionId: string | undefined;
 
@@ -143,9 +205,51 @@ describe("ClaudeCliAdapter", () => {
     expect(sessionId).toBe("abc");
   });
 
+  it("on Windows uses shell and passes prompt via stdin", async () => {
+    const spawnFn: SpawnFn = vi.fn((_cmd, _args, _opts) =>
+      fakeChild({
+        lines: [
+          JSON.stringify({
+            type: "result",
+            result: "ok",
+            session_id: "w",
+          }),
+        ],
+      }),
+    );
+    const adapter = new ClaudeCliAdapter(spawnFn, "claude", "win32");
+    for await (const _ of adapter.run({
+      prompt: "你好",
+      cwd: process.cwd(),
+    })) {
+      // drain
+    }
+    const [, args, opts] = (spawnFn as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(opts.shell).toBe(true);
+    expect(args).toContain("-p");
+    expect(args).not.toContain("你好");
+    const child = (spawnFn as ReturnType<typeof vi.fn>).mock.results[0]
+      .value as ChildProcess & { stdin: { end: ReturnType<typeof vi.fn> } };
+    expect(child.stdin.end).toHaveBeenCalledWith("你好", "utf8");
+  });
+
+  it("throws when workspace cwd is missing", async () => {
+    const spawnFn: SpawnFn = vi.fn(() => fakeChild({}));
+    const adapter = new ClaudeCliAdapter(spawnFn, "claude", "linux");
+    await expect(async () => {
+      for await (const _ of adapter.run({
+        prompt: "x",
+        cwd: "E:/tmp/definitely-missing-ml-aos-cwd",
+      })) {
+        // drain
+      }
+    }).rejects.toThrow(/工作区目录不存在/);
+    expect(spawnFn).not.toHaveBeenCalled();
+  });
+
   it("throws CliEngineUnavailableError when claude binary is missing", async () => {
     const spawnFn: SpawnFn = vi.fn(() => fakeChild({ enoent: true }));
-    const adapter = new ClaudeCliAdapter(spawnFn, "missing-claude");
+    const adapter = new ClaudeCliAdapter(spawnFn, "missing-claude", "linux");
 
     let caught: unknown;
     try {

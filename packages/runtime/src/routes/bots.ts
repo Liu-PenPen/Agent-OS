@@ -2,6 +2,8 @@ import type { EngineKind } from "@ml-aos/shared";
 import type { RouteHandler } from "../http/router.js";
 import { readJsonBody, sendError, sendJson } from "../http/json.js";
 import type { BotService } from "../services/bot-service.js";
+import type { WorkspaceService } from "../services/workspace-service.js";
+import { seedBundledSkills } from "../services/skill-seed.js";
 
 export function registerBotRoutes(
   router: {
@@ -11,6 +13,7 @@ export function registerBotRoutes(
     delete: (path: string, handler: RouteHandler) => void;
   },
   service: BotService,
+  workspaceService?: WorkspaceService,
 ): void {
   router.get("/api/bots", async (_req, res) => {
     const bots = await service.list();
@@ -25,13 +28,15 @@ export function registerBotRoutes(
         defaultEngine?: EngineKind;
         instructions?: string;
         enabled?: boolean;
+        skills?: string[];
       }>(req);
       const bot = await service.create({
         name: body.name ?? "",
         role: body.role ?? "",
-        defaultEngine: body.defaultEngine ?? "mock",
+        defaultEngine: body.defaultEngine ?? "claude",
         instructions: body.instructions ?? "",
         enabled: body.enabled ?? true,
+        skills: body.skills,
       });
       sendJson(res, 201, bot);
     } catch (error) {
@@ -48,6 +53,7 @@ export function registerBotRoutes(
         defaultEngine?: EngineKind;
         instructions?: string;
         enabled?: boolean;
+        skills?: string[];
       }>(req);
       const bot = await service.update(params.id, body);
       sendJson(res, 200, bot);
@@ -65,6 +71,22 @@ export function registerBotRoutes(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bad request";
       sendError(res, /not found/i.test(message) ? 404 : 500, message);
+    }
+  });
+
+  router.post("/api/bots/seed-team", async (_req, res) => {
+    try {
+      const bots = await service.seedDefaultTeam();
+      if (workspaceService) {
+        const workspaces = await workspaceService.list();
+        for (const ws of workspaces) {
+          await seedBundledSkills(ws.localPath);
+        }
+      }
+      sendJson(res, 200, bots);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Bad request";
+      sendError(res, 500, message);
     }
   });
 }

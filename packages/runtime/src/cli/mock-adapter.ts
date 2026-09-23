@@ -38,7 +38,8 @@ export class MockCliAdapter implements CliAdapter {
         return;
       }
 
-      const text = `Mock response to: ${input.prompt}`;
+      const preview = input.prompt.replace(/\s+/g, " ").trim().slice(0, 160);
+      const text = `Mock response to: ${preview}`;
       const chunks = text.match(/.{1,8}/g) ?? [text];
 
       for (const chunk of chunks) {

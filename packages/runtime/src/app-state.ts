@@ -5,6 +5,7 @@ import type {
   Topic,
   ChatMessage,
   PipelineTask,
+  StoredUser,
 } from "@ml-aos/shared";
 
 export interface AppState {
@@ -14,4 +15,5 @@ export interface AppState {
   topics: Topic[];
   messages: ChatMessage[];
   pipelines: PipelineTask[];
+  users?: StoredUser[];
 }

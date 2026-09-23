@@ -1,5 +1,5 @@
 import type { RouteHandler } from "../http/router.js";
-import { readJsonBody, sendError, sendJson } from "../http/json.js";
+import { sendError, sendJson } from "../http/json.js";
 import type { PipelineService } from "../services/pipeline-service.js";
 
 export function registerPipelineRoutes(
@@ -18,34 +18,15 @@ export function registerPipelineRoutes(
     sendJson(res, 200, task);
   });
 
-  router.post("/api/topics/:id/dispatch", async (req, res, params) => {
-    try {
-      const body = await readJsonBody<{
-        title?: string;
-        assigneeBotIds?: string[];
-      }>(req);
-      if (!body.title?.trim()) {
-        sendError(res, 400, "title is required");
-        return;
-      }
-      const task = await service.dispatch(params.id, {
-        title: body.title.trim(),
-        assigneeBotIds: body.assigneeBotIds,
-      });
-      sendJson(res, 201, task);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Bad request";
-      sendError(res, /not found/i.test(message) ? 404 : 500, message);
-    }
+  router.post("/api/topics/:id/dispatch", async (_req, res) => {
+    sendError(
+      res,
+      410,
+      "启动流水线已移除。请 @CEO 助理并用 dispatch_task 协作（对齐 agent-os）。",
+    );
   });
 
-  router.post("/api/pipelines/:id/advance", async (_req, res, params) => {
-    try {
-      const task = await service.advance(params.id);
-      sendJson(res, 200, task);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Bad request";
-      sendError(res, /not found/i.test(message) ? 404 : 500, message);
-    }
+  router.post("/api/pipelines/:id/advance", async (_req, res) => {
+    sendError(res, 410, "流水线推进已移除。请由 CEO 通过 dispatch_task 继续派发。");
   });
 }

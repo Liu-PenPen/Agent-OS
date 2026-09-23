@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ml-aos/shared": "workspace:*",
+    "@playwright/test": "^1.51.0",
     "ws": "^8.18.1",
     "zod": "^3.24.2"
   },

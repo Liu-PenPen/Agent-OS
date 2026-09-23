@@ -6,7 +6,10 @@ import type { BotService } from "./bot-service.js";
 import type { SettingsService } from "./settings-service.js";
 import type { CliAdapter } from "../cli/types.js";
 import { BotRunService } from "./bot-run-service.js";
-import type { PipelineRunner } from "./pipeline-runner.js";
+import {
+  compactCliSession,
+  parseCompactCommand,
+} from "../cli/compact-session.js";
 
 export interface CreateTopicInput {
   workspaceId: string;
@@ -28,7 +31,6 @@ export type ChatEvent =
 
 export class ChatService {
   private readonly botRun: BotRunService;
-  private pipelineAbort?: Pick<PipelineRunner, "handleAbort">;
 
   constructor(
     private readonly store: JsonStore,
@@ -36,7 +38,7 @@ export class ChatService {
     private readonly botService: BotService,
     adapter?: CliAdapter,
     private readonly emit?: (event: ChatEvent) => void,
-    settingsService?: SettingsService,
+    private readonly settingsService?: SettingsService,
     botRun?: BotRunService,
   ) {
     this.botRun =
@@ -55,14 +57,21 @@ export class ChatService {
       );
   }
 
-  setPipelineRunner(runner: Pick<PipelineRunner, "handleAbort">): void {
-    this.pipelineAbort = runner;
+  async abort(topicId: string): Promise<{ ok: true; aborted: boolean }> {
+    return this.botRun.abort(topicId);
   }
 
-  async abort(topicId: string): Promise<{ ok: true; aborted: boolean }> {
-    const result = await this.botRun.abort(topicId);
-    await this.pipelineAbort?.handleAbort(topicId, result.aborted);
-    return result;
+  async deleteTopic(id: string): Promise<void> {
+    const topic = await this.getTopic(id);
+    if (!topic) {
+      throw new Error(`Topic not found: ${id}`);
+    }
+    this.botRun.discard(id);
+    await this.store.transact((state) => {
+      state.topics = state.topics.filter((t) => t.id !== id);
+      state.messages = state.messages.filter((m) => m.topicId !== id);
+      state.pipelines = state.pipelines.filter((p) => p.topicId !== id);
+    });
   }
 
   async createTopic(input: CreateTopicInput): Promise<Topic> {
@@ -71,7 +80,6 @@ export class ChatService {
       throw new Error(`Workspace not found: ${input.workspaceId}`);
     }
 
-    const state = await this.store.load();
     const topic: Topic = {
       id: randomUUID(),
       workspaceId: input.workspaceId,
@@ -79,8 +87,9 @@ export class ChatService {
       createdAt: new Date().toISOString(),
       pipelineStage: "idle",
     };
-    state.topics.push(topic);
-    await this.store.save(state);
+    await this.store.transact((state) => {
+      state.topics.push(topic);
+    });
 
     this.emit?.({
       type: "pipeline.update",
@@ -128,30 +137,72 @@ export class ChatService {
       content: input.content,
     });
 
+    const compact = parseCompactCommand(input.content);
+    if (compact.isCompact) {
+      if (!input.mentionBotId) {
+        const note = await this.appendMessage({
+          topicId,
+          author: "system",
+          content: "使用 /compact 时请先 @ 一个智能体，以整理该 Bot 的 CLI 会话。",
+        });
+        return [userMessage, note];
+      }
+      const bot = await this.botService.get(input.mentionBotId);
+      if (!bot) {
+        throw new Error(`Bot not found: ${input.mentionBotId}`);
+      }
+      const sessionId = topic.cliSessions?.[bot.id];
+      if (!sessionId) {
+        const note = await this.appendMessage({
+          topicId,
+          author: "system",
+          content: `${bot.name} 还没有可整理的 CLI 会话。先正常对话一轮后再 /compact。`,
+        });
+        return [userMessage, note];
+      }
+      const workspace = await this.workspaceService.get(topic.workspaceId);
+      if (!workspace) {
+        throw new Error(`Workspace not found: ${topic.workspaceId}`);
+      }
+      try {
+        const engine = bot.defaultEngine === "codex" ? "codex" : "claude";
+        const result = await compactCliSession({
+          engine,
+          sessionId,
+          cwd: workspace.localPath,
+          instructions: compact.instructions,
+        });
+        const note = await this.appendMessage({
+          topicId,
+          author: "system",
+          content: result.message?.trim()
+            ? `已整理 ${bot.name} 的上下文。\n${result.message.trim()}`
+            : `已整理 ${bot.name} 的上下文（/compact）。`,
+        });
+        return [userMessage, note];
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "上下文整理失败";
+        const note = await this.appendMessage({
+          topicId,
+          author: "system",
+          content: `[compact] ${message}`,
+        });
+        return [userMessage, note];
+      }
+    }
+
     if (!input.mentionBotId) {
       return [userMessage];
     }
 
-    const result = await this.botRun.run({
+    const botMessage = await this.botRun.start({
       topicId,
       botId: input.mentionBotId,
       prompt: input.content,
+      origin: "chat",
     });
 
-    const finalMessages = await this.listMessages(topicId);
-    const userIndex = finalMessages.findIndex((m) => m.id === userMessage.id);
-    if (result.clarificationPending) {
-      return finalMessages.filter(
-        (m, index) =>
-          m.id === userMessage.id ||
-          m.id === result.messageId ||
-          (index > userIndex && m.kind === "clarification"),
-      );
-    }
-
-    return finalMessages.filter(
-      (m) => m.id === userMessage.id || m.id === result.messageId,
-    );
+    return [userMessage, botMessage];
   }
 
   private async appendMessage(
@@ -159,7 +210,6 @@ export class ChatService {
       botId?: string;
     },
   ): Promise<ChatMessage> {
-    const state = await this.store.load();
     const message: ChatMessage = {
       id: randomUUID(),
       topicId: input.topicId,
@@ -168,8 +218,9 @@ export class ChatService {
       createdAt: new Date().toISOString(),
       ...(input.botId ? { botId: input.botId } : {}),
     };
-    state.messages.push(message);
-    await this.store.save(state);
+    await this.store.transact((state) => {
+      state.messages.push(message);
+    });
     this.emit?.({ type: "message.upsert", message });
     return message;
   }

@@ -1,6 +1,7 @@
 export type CliEvent =
   | { type: "text_delta"; text: string }
   | { type: "tool"; name: string; input?: unknown }
+  | { type: "usage"; usedTokens: number; contextWindowTokens?: number }
   | { type: "done"; sessionId?: string }
   | { type: "error"; message: string }
   | {
@@ -15,6 +16,7 @@ export interface CliRunInput {
   cwd: string;
   sessionId?: string;
   signal?: AbortSignal;
+  env?: Record<string, string>;
 }
 
 export interface CliAdapter {

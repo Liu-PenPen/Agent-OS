@@ -3,6 +3,16 @@ import { readJsonBody, sendError, sendJson } from "../http/json.js";
 import type { TicketService } from "../services/ticket-service.js";
 import type { TicketRole } from "../gitee/projects.js";
 
+function parseIssueKey(issueKey: string): number {
+  const key = issueKey.trim();
+  if (!/^\d+$/.test(key)) {
+    throw new Error(
+      `工单详情需使用数字 id（收到: ${key}）。请从列表点击工单卡片。`,
+    );
+  }
+  return Number(key);
+}
+
 export function registerTicketRoutes(
   router: {
     get: (path: string, handler: RouteHandler) => void;
@@ -80,6 +90,55 @@ export function registerTicketRoutes(
           : /不存在|无效|404/i.test(message)
             ? 404
             : 500;
+        sendError(res, status, message);
+      }
+    },
+  );
+
+  router.get(
+    "/api/tickets/projects/:id/issues/:issueKey/states",
+    async (_req, res, params) => {
+      try {
+        const issueId = parseIssueKey(params.issueKey);
+        const states = await service.listIssueStates(params.id, issueId);
+        sendJson(res, 200, states);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Bad request";
+        const status = /缺少|MI_CLAW|GITEE_/.test(message)
+          ? 503
+          : /不存在|无效|404|需使用数字 id/i.test(message)
+            ? 404
+            : /缺少 issue_type/i.test(message)
+              ? 400
+              : 500;
+        sendError(res, status, message);
+      }
+    },
+  );
+
+  router.post(
+    "/api/tickets/projects/:id/issues/:issueKey/state",
+    async (req, res, params) => {
+      try {
+        const body = await readJsonBody<{ issueStateId?: number }>(req);
+        if (typeof body.issueStateId !== "number") {
+          sendError(res, 400, "issueStateId 必填且须为数字");
+          return;
+        }
+        const issueId = parseIssueKey(params.issueKey);
+        const result = await service.updateIssueState({
+          projectId: params.id,
+          issueId,
+          issueStateId: body.issueStateId,
+        });
+        sendJson(res, 200, result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Bad request";
+        const status = /缺少|MI_CLAW|GITEE_/.test(message)
+          ? 503
+          : /不存在|无效|404|需使用数字 id/i.test(message)
+            ? 404
+            : 400;
         sendError(res, status, message);
       }
     },

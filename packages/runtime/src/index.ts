@@ -27,6 +27,7 @@ import { registerClarificationRoutes } from "./routes/clarifications.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerControlRoutes } from "./routes/controls.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerBoardRoutes } from "./routes/board.js";
 import { registerTicketRoutes } from "./routes/tickets.js";
 import { registerAcceptanceRoutes } from "./routes/acceptance.js";
 import { SettingsService } from "./services/settings-service.js";
@@ -163,6 +164,7 @@ registerClarificationRoutes(router, clarificationService);
 registerSettingsRoutes(router, settingsService);
 registerControlRoutes(router, appControl, schedules, dataDir);
 registerAuthRoutes(router, authService);
+registerBoardRoutes(router, taskBoard);
 registerTicketRoutes(router, ticketService);
 registerAcceptanceRoutes(router, {
   store,

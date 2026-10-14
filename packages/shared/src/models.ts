@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type ThemeMode = "dark" | "light" | "system";
+export type ThemeMode = "warm" | "dark" | "light" | "system";
 export type EngineKind = "claude" | "codex";
 export type PipelineStage =
   | "idle"
@@ -17,6 +17,17 @@ export interface AppSettings {
   notifications: boolean;
 }
 
+/** A skill bound to a bot after it is resolved in the user skill library. */
+export interface SkillBinding {
+  id: string;
+  /** `owner/repo@skill`, `bundled:<id>`, or the skill id when discovered locally. */
+  source: string;
+  /** Absolute path to SKILL.md when status is ready. */
+  localPath?: string;
+  status: "ready" | "failed";
+  error?: string;
+}
+
 export interface BotConfig {
   id: string;
   name: string;
@@ -24,8 +35,8 @@ export interface BotConfig {
   defaultEngine: EngineKind;
   instructions: string;
   enabled: boolean;
-  /** agent-os style skill ids; bot must Read `.agents/skills/<id>/SKILL.md` in workspace. */
-  skills?: string[];
+  /** Installed skills. Legacy stores may still contain plain skill ids. */
+  skills?: SkillBinding[];
 }
 
 export interface Workspace {
@@ -152,7 +163,7 @@ export interface AuthResponse {
   token: string;
 }
 
-const ThemeModeSchema = z.enum(["dark", "light", "system"]);
+const ThemeModeSchema = z.enum(["warm", "dark", "light", "system"]);
 const EngineKindSchema = z.preprocess(
   (value) => (value === "mock" ? "claude" : value),
   z.enum(["claude", "codex"]),
@@ -167,21 +178,66 @@ const PipelineStageSchema = z.enum([
 ]);
 
 export const AppSettingsSchema = z.object({
-  theme: ThemeModeSchema.default("dark"),
+  theme: ThemeModeSchema.default("warm"),
   defaultEngine: EngineKindSchema,
   dataDir: z.string(),
   notifications: z.boolean(),
 });
 
-export const BotConfigSchema = z.object({
+export const SkillBindingSchema = z.object({
   id: z.string(),
-  name: z.string(),
-  role: z.string(),
-  defaultEngine: EngineKindSchema,
-  instructions: z.string(),
-  enabled: z.boolean(),
-  skills: z.array(z.string()).optional().default([]),
+  source: z.string(),
+  localPath: z.string().optional(),
+  status: z.enum(["ready", "failed"]),
+  error: z.string().optional(),
 });
+
+function skillBindingFromStored(value: string | SkillBinding): SkillBinding {
+  if (typeof value !== "string") return value;
+  const id = value.trim().toLowerCase();
+  return {
+    id,
+    source: id,
+    status: "failed",
+    error: "尚未安装",
+  };
+}
+
+export const BotConfigSchema: z.ZodType<BotConfig, z.ZodTypeDef, unknown> = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    role: z.string(),
+    defaultEngine: EngineKindSchema,
+    instructions: z.string(),
+    enabled: z.boolean(),
+    skills: z
+      .array(z.union([z.string(), SkillBindingSchema]))
+      .optional()
+      .default([])
+      .transform((items) => items.map(skillBindingFromStored)),
+  })
+  .transform((bot): BotConfig => {
+    if (
+      !bot.id ||
+      !bot.name ||
+      !bot.role ||
+      bot.instructions == null ||
+      bot.enabled == null ||
+      !bot.defaultEngine
+    ) {
+      throw new Error("Invalid bot config");
+    }
+    return {
+      id: bot.id,
+      name: bot.name,
+      role: bot.role,
+      defaultEngine: bot.defaultEngine,
+      instructions: bot.instructions,
+      enabled: bot.enabled,
+      skills: bot.skills ?? [],
+    };
+  });
 
 export const WorkspaceSchema = z.object({
   id: z.string(),

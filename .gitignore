@@ -1,6 +1,39 @@
-node_modules
-dist
-src-tauri/target
+# Dependencies & build
+node_modules/
+dist/
+**/dist/
+**/src-tauri/target/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Secrets & local runtime data
 .env
+.env.*
+!.env.example
 data/
-.superdesign/tmp
+**/data/
+packages/runtime/data/
+
+# Local Gitee allowlist (example is committed)
+config/gitee-projects.json
+
+# Private / internal working docs (not for the public repo)
+docs/
+.superpowers/
+.superdesign/
+
+# OS & editor junk
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+*~
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Test / tool caches
+.turbo/
+tmp/
+tmp-*.js

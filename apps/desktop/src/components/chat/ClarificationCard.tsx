@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { ChatMessage } from "@ml-aos/shared";
-import { IconAlert } from "../shell/icons";
 
 type ClarificationCardProps = {
   message: ChatMessage;
@@ -24,58 +23,48 @@ export function ClarificationCard({
   if (!c) return null;
 
   return (
-    <article className="clarification-card">
-      <header className="clarification-head">
-        <IconAlert />
-        <div>
-          <h4>需要人工确认</h4>
-          <p className="muted">
-            由 {botName} 发起
-            {botRole ? ` · ${botRole}` : ""}
-          </p>
-        </div>
+    <article className="lark-card clarification-card">
+      <header className="lark-card-header">
+        <strong>需求确认</strong>
+        <span>
+          1 / 1
+          {botName ? ` · ${botName}` : ""}
+          {botRole ? ` · ${botRole}` : ""}
+        </span>
       </header>
-      <p className="clarification-prompt">{c.prompt}</p>
-      <div className="clarification-options">
-        {c.options.map((opt) => {
-          const selected = answered
-            ? c.selectedOptionId === opt.id
-            : picked === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              className={`option-card ${selected ? "selected" : ""}`}
-              disabled={answered}
-              onClick={() => setPicked(opt.id)}
-            >
-              <span className="radio-dot" aria-hidden />
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-      {answered ? (
-        <p className="muted">
-          已答复
-          {c.selectedOptionId
-            ? `：${c.options.find((o) => o.id === c.selectedOptionId)?.label ?? c.selectedOptionId}`
-            : ""}
-        </p>
-      ) : (
-        <div className="clarification-actions">
-          <button
-            type="button"
-            className="btn-confirm"
-            disabled={!picked}
-            onClick={() => {
-              if (picked) onAnswer(c.id, picked);
-            }}
-          >
-            确认策略
-          </button>
+      <div className="lark-card-body">
+        <p className="lark-card-lead">{c.prompt}</p>
+        <p className="muted">选择最符合预期的一项：</p>
+        <div className="lark-options">
+          {c.options.map((opt, index) => {
+            const selected = answered
+              ? c.selectedOptionId === opt.id
+              : picked === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                className={`lark-option ${selected ? "selected" : ""}`}
+                disabled={answered}
+                onClick={() => {
+                  setPicked(opt.id);
+                  if (!answered) onAnswer(c.id, opt.id);
+                }}
+              >
+                {opt.label}
+                {index === 0 ? "（推荐）" : ""}
+              </button>
+            );
+          })}
         </div>
-      )}
+        {answered ? (
+          <p className="lark-card-foot">已按你的选择继续。</p>
+        ) : (
+          <p className="lark-card-foot">
+            点选一项即可提交。推荐项为第一项。
+          </p>
+        )}
+      </div>
     </article>
   );
 }

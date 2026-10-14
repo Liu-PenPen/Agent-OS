@@ -2,8 +2,6 @@ import type { EngineKind } from "@ml-aos/shared";
 import type { RouteHandler } from "../http/router.js";
 import { readJsonBody, sendError, sendJson } from "../http/json.js";
 import type { BotService } from "../services/bot-service.js";
-import type { WorkspaceService } from "../services/workspace-service.js";
-import { seedBundledSkills } from "../services/skill-seed.js";
 
 export function registerBotRoutes(
   router: {
@@ -13,7 +11,6 @@ export function registerBotRoutes(
     delete: (path: string, handler: RouteHandler) => void;
   },
   service: BotService,
-  workspaceService?: WorkspaceService,
 ): void {
   router.get("/api/bots", async (_req, res) => {
     const bots = await service.list();
@@ -77,12 +74,6 @@ export function registerBotRoutes(
   router.post("/api/bots/seed-team", async (_req, res) => {
     try {
       const bots = await service.seedDefaultTeam();
-      if (workspaceService) {
-        const workspaces = await workspaceService.list();
-        for (const ws of workspaces) {
-          await seedBundledSkills(ws.localPath);
-        }
-      }
       sendJson(res, 200, bots);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bad request";

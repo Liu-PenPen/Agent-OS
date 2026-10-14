@@ -27,6 +27,7 @@ export type ShellContextValue = {
   selectedTopic: Topic | null;
   selectTopic: (id: string | null) => void;
   createTopic: (title?: string) => Promise<Topic | null>;
+  deleteTopic: (id: string) => Promise<boolean>;
   messages: ChatMessage[];
   bots: BotConfig[];
   enabledBots: BotConfig[];
@@ -36,11 +37,22 @@ export type ShellContextValue = {
   topicPendingIds: Set<string>;
   sendMessage: (content: string, mentionBotId?: string) => Promise<void>;
   abortTopic: () => Promise<void>;
-  dispatchTopic: (title?: string) => Promise<void>;
   answerClarification: (clarificationId: string, optionId: string) => Promise<void>;
+  decideControl: (
+    topicId: string,
+    decision: {
+      token: string;
+      action: "clarification" | "spec" | "approval" | "visual";
+      answer?: string;
+      decision?: "approved" | "rejected" | "false_positive" | "confirmed";
+    },
+  ) => Promise<void>;
   refreshAll: () => Promise<void>;
+  refreshPending: () => Promise<void>;
   sending: boolean;
   error: string | null;
+  rightPanelCollapsed: boolean;
+  toggleRightPanel: () => void;
 };
 
 const ShellContext = createContext<ShellContextValue | null>(null);
@@ -64,6 +76,25 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("ml-aos.rightPanelCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleRightPanel = useCallback(() => {
+    setRightPanelCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("ml-aos.rightPanelCollapsed", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   const workspace = useMemo(
     () => workspaces.find((w) => w.id === workspaceId) ?? null,
@@ -192,6 +223,29 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep bot roster + pending queue fresh after seed / settings edits / runtime restart.
+  useEffect(() => {
+    const refreshBots = () => {
+      void api.listBots().then(setBots).catch(() => {});
+    };
+    const refreshShell = () => {
+      refreshBots();
+      void refreshPending();
+    };
+    const onFocus = () => refreshShell();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshShell();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(refreshShell, 15_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(timer);
+    };
+  }, [refreshPending]);
+
   useEffect(() => {
     if (!selectedTopicId) {
       setMessages([]);
@@ -220,37 +274,45 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   }, [selectedTopicId, workspaceId, loadPipeline]);
 
   useEffect(() => {
-    const ws = connectWs((raw) => {
-      const event = raw as WsPayload;
-      if (!event || typeof event !== "object" || !("type" in event)) return;
+    const ws = connectWs(
+      (raw) => {
+        const event = raw as WsPayload;
+        if (!event || typeof event !== "object" || !("type" in event)) return;
 
-      if (event.type === "message.upsert") {
-        upsertMessage(event.message);
-        if (
-          event.message.kind === "clarification" ||
-          event.message.author === "system"
-        ) {
-          void refreshPending();
+        if (event.type === "message.upsert") {
+          upsertMessage(event.message);
+          if (
+            event.message.kind === "clarification" ||
+            event.message.kind === "app-tool" ||
+            event.message.author === "system"
+          ) {
+            void refreshPending();
+          }
+          return;
         }
-        return;
-      }
 
-      if (event.type === "pipeline.update") {
-        setTopics((prev) =>
-          prev.map((t) =>
-            t.id === event.topicId
-              ? { ...t, pipelineStage: event.pipelineStage }
-              : t,
-          ),
-        );
-        if (event.topicId === selectedTopicIdRef.current) {
-          void refreshTopics().then((list) => {
-            const topic = list.find((t) => t.id === event.topicId) ?? null;
-            void loadPipeline(topic);
-          });
+        if (event.type === "pipeline.update") {
+          setTopics((prev) =>
+            prev.map((t) =>
+              t.id === event.topicId
+                ? { ...t, pipelineStage: event.pipelineStage }
+                : t,
+            ),
+          );
+          if (event.topicId === selectedTopicIdRef.current) {
+            void refreshTopics().then((list) => {
+              const topic = list.find((t) => t.id === event.topicId) ?? null;
+              void loadPipeline(topic);
+            });
+          }
         }
-      }
-    });
+      },
+      () => {
+        const topicId = selectedTopicIdRef.current;
+        if (!topicId) return;
+        void api.listMessages(topicId).then(setMessages).catch(() => undefined);
+      },
+    );
     return () => {
       ws.close();
     };
@@ -284,57 +346,96 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     [workspaceId, refreshTopics],
   );
 
+  const deleteTopic = useCallback(
+    async (id: string) => {
+      setError(null);
+      const current = topics.find((t) => t.id === id);
+      if (!current) return false;
+      const index = topics.findIndex((t) => t.id === id);
+      try {
+        await api.deleteTopic(id);
+        const list = await refreshTopics();
+        if (selectedTopicId === id) {
+          const neighbor = list[index] ?? list[index - 1] ?? null;
+          setSelectedTopicId(neighbor?.id ?? null);
+          if (!neighbor) {
+            setMessages([]);
+            setPipeline(null);
+          }
+        }
+        await refreshPending();
+        return true;
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "删除话题失败");
+        return false;
+      }
+    },
+    [topics, selectedTopicId, refreshTopics, refreshPending],
+  );
+
   const sendMessage = useCallback(
     async (content: string, mentionBotId?: string) => {
       if (!selectedTopicId) return;
       setSending(true);
       setError(null);
       try {
-        await api.sendMessage(selectedTopicId, { content, mentionBotId });
-        const [msgs] = await Promise.all([
-          api.listMessages(selectedTopicId),
-          refreshPending(),
-        ]);
-        setMessages(msgs);
-        const list = await refreshTopics();
-        const topic = list.find((t) => t.id === selectedTopicId) ?? null;
-        await loadPipeline(topic);
+        const created = await api.sendMessage(selectedTopicId, {
+          content,
+          mentionBotId,
+        });
+        for (const msg of created) {
+          upsertMessage(msg);
+        }
+        void refreshPending();
+        void refreshTopics().then(async (list) => {
+          const topic = list.find((t) => t.id === selectedTopicId) ?? null;
+          await loadPipeline(topic);
+        });
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "发送失败");
       } finally {
         setSending(false);
       }
     },
-    [selectedTopicId, refreshPending, refreshTopics, loadPipeline],
+    [
+      selectedTopicId,
+      upsertMessage,
+      refreshPending,
+      refreshTopics,
+      loadPipeline,
+    ],
   );
 
   const abortTopic = useCallback(async () => {
     if (!selectedTopicId) return;
     setError(null);
+    const stoppedAt = new Date().toISOString();
+    setMessages((prev) =>
+      prev.map((message) => {
+        const live =
+          message.streaming || message.run?.status === "running";
+        if (!live) return message;
+        return {
+          ...message,
+          streaming: false,
+          content: message.content.trim() ? message.content : "任务已停止。",
+          run: message.run
+            ? {
+                ...message.run,
+                status: "cancelled",
+                current: "已停止",
+                finishedAt: stoppedAt,
+              }
+            : message.run,
+        };
+      }),
+    );
     try {
       await api.abortTopic(selectedTopicId);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "中止失败");
     }
   }, [selectedTopicId]);
-
-  const dispatchTopic = useCallback(
-    async (title?: string) => {
-      if (!selectedTopicId) return;
-      setError(null);
-      try {
-        const task = await api.dispatchTopic(selectedTopicId, {
-          title: title?.trim() || selectedTopic?.title || "流水线任务",
-          assigneeBotIds: enabledBots.slice(0, 4).map((b) => b.id),
-        });
-        setPipeline(task);
-        await refreshTopics();
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "启动流水线失败");
-      }
-    },
-    [selectedTopicId, selectedTopic, enabledBots, refreshTopics],
-  );
 
   const answerClarification = useCallback(
     async (clarificationId: string, optionId: string) => {
@@ -348,6 +449,27 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       }
     },
     [upsertMessage, refreshPending],
+  );
+
+  const decideControl = useCallback(
+    async (
+      topicId: string,
+      decision: {
+        token: string;
+        action: "clarification" | "spec" | "approval" | "visual";
+        answer?: string;
+        decision?: "approved" | "rejected" | "false_positive" | "confirmed";
+      },
+    ) => {
+      setError(null);
+      try {
+        await api.answerControl(topicId, decision);
+        await refreshPending();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "确认卡提交失败");
+      }
+    },
+    [refreshPending],
   );
 
   const value: ShellContextValue = {
@@ -366,6 +488,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     selectedTopic,
     selectTopic,
     createTopic,
+    deleteTopic,
     messages,
     bots,
     enabledBots,
@@ -375,11 +498,14 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     topicPendingIds,
     sendMessage,
     abortTopic,
-    dispatchTopic,
     answerClarification,
+    decideControl,
     refreshAll,
+    refreshPending,
     sending,
     error,
+    rightPanelCollapsed,
+    toggleRightPanel,
   };
 
   return (

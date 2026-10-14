@@ -12,6 +12,31 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+/** Copy a skill directory. Existing files at the destination are kept. */
+async function copySkillDir(srcDir: string, destDir: string): Promise<void> {
+  await mkdir(destDir, { recursive: true });
+  const entries = await readdir(srcDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === "references" && entry.isDirectory()) {
+      const refSrc = join(srcDir, "references");
+      const refDest = join(destDir, "references");
+      await mkdir(refDest, { recursive: true });
+      const refs = await readdir(refSrc, { withFileTypes: true });
+      for (const ref of refs) {
+        if (!ref.isFile()) continue;
+        const out = join(refDest, ref.name);
+        if (await pathExists(out)) continue;
+        await writeFile(out, await readFile(join(refSrc, ref.name)));
+      }
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const out = join(destDir, entry.name);
+    if (await pathExists(out)) continue;
+    await writeFile(out, await readFile(join(srcDir, entry.name)));
+  }
+}
+
 /** Bundled default skills shipped with @ml-aos/runtime (agent-os aligned). */
 export function bundledSkillsRoot(): string {
   // src/services → ../../skills ; dist/services → ../../skills
@@ -19,8 +44,26 @@ export function bundledSkillsRoot(): string {
 }
 
 /**
+ * Install one bundled skill into `<homeDir>/.agents/skills/<id>/`.
+ * Returns the SKILL.md path. Existing files are kept.
+ */
+export async function installBundledSkill(
+  skillId: string,
+  homeDir: string,
+): Promise<string | undefined> {
+  const src = join(bundledSkillsRoot(), skillId, "SKILL.md");
+  if (!(await pathExists(src))) return undefined;
+  const destDir = join(homeDir, ".agents", "skills", skillId);
+  const dest = join(destDir, "SKILL.md");
+  if (!(await pathExists(dest))) {
+    await copySkillDir(dirname(src), destDir);
+  }
+  return dest;
+}
+
+/**
  * Copy missing bundled skills into `<workspace>/.agents/skills/`.
- * Never overwrites an existing SKILL.md (workspace wins).
+ * Never overwrites an existing SKILL.md.
  */
 export async function seedBundledSkills(
   workspaceDir: string,
@@ -42,42 +85,7 @@ export async function seedBundledSkills(
     const dest = join(destDir, "SKILL.md");
     if (await pathExists(dest)) continue;
 
-    await mkdir(destDir, { recursive: true });
-    const body = await readFile(src, "utf-8");
-    await writeFile(dest, body, "utf-8");
-
-    // Copy sibling reference files if present (non-destructive).
-    const srcDir = dirname(src);
-    const siblings = await readdir(srcDir, { withFileTypes: true });
-    for (const sib of siblings) {
-      if (!sib.isFile() || sib.name === "SKILL.md") continue;
-      const sibDest = join(destDir, sib.name);
-      if (await pathExists(sibDest)) continue;
-      await writeFile(
-        sibDest,
-        await readFile(join(srcDir, sib.name), "utf-8"),
-        "utf-8",
-      );
-    }
-
-    // Copy references/ folder if present.
-    const refSrc = join(srcDir, "references");
-    if (await pathExists(refSrc)) {
-      const refDest = join(destDir, "references");
-      await mkdir(refDest, { recursive: true });
-      const refs = await readdir(refSrc, { withFileTypes: true });
-      for (const r of refs) {
-        if (!r.isFile()) continue;
-        const out = join(refDest, r.name);
-        if (await pathExists(out)) continue;
-        await writeFile(
-          out,
-          await readFile(join(refSrc, r.name), "utf-8"),
-          "utf-8",
-        );
-      }
-    }
-
+    await copySkillDir(dirname(src), destDir);
     seeded.push(skillId);
   }
   return seeded;

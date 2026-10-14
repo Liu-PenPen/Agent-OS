@@ -11,12 +11,15 @@ import { PipelineRunner } from "./services/pipeline-runner.js";
 import { TeamHandoff } from "./services/team-handoff.js";
 import { AppControl } from "./services/app-control.js";
 import { ScheduleService } from "./services/schedule-service.js";
+import { TicketPullScheduleService } from "./services/ticket-pull-schedule.js";
+import { AgentScheduleService } from "./services/agent-schedule.js";
 import { ClarificationService } from "./services/clarification-service.js";
 import { TicketService } from "./services/ticket-service.js";
 import { TaskBoardService } from "./services/task-board-service.js";
 import { AcceptanceService } from "./services/acceptance-service.js";
 import { AcceptanceRunner } from "./services/acceptance-runner.js";
 import { GiteeProjectsStore } from "./gitee/projects.js";
+import { setGiteeCredentialsDataDir } from "./gitee/credentials.js";
 import { createRouter } from "./http/router.js";
 import { applyCors, sendJson } from "./http/json.js";
 import { registerWorkspaceRoutes } from "./routes/workspaces.js";
@@ -25,16 +28,19 @@ import { registerTopicRoutes } from "./routes/topics.js";
 import { registerPipelineRoutes } from "./routes/pipelines.js";
 import { registerClarificationRoutes } from "./routes/clarifications.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerGiteeIntegrationRoutes } from "./routes/gitee-integration.js";
 import { registerControlRoutes } from "./routes/controls.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerBoardRoutes } from "./routes/board.js";
 import { registerTicketRoutes } from "./routes/tickets.js";
+import { registerTicketPullRoutes } from "./routes/ticket-pulls.js";
+import { registerAgentScheduleRoutes } from "./routes/agent-schedules.js";
 import { registerAcceptanceRoutes } from "./routes/acceptance.js";
 import { SettingsService } from "./services/settings-service.js";
+import { GiteeIntegrationService } from "./services/gitee-integration-service.js";
 import { AuthService } from "./services/auth-service.js";
 import { attachWebSocket } from "./ws.js";
-import { seedBundledSkills } from "./services/skill-seed.js";
-import { findMissingSkills } from "./services/skill-paths.js";
+import { SkillLibrary } from "./services/skill-install.js";
 
 loadDotEnv();
 
@@ -42,12 +48,15 @@ const HOST = "127.0.0.1";
 const PORT = 17890;
 
 const dataDir = process.env.ML_AOS_DATA_DIR ?? join(process.cwd(), "data");
+setGiteeCredentialsDataDir(dataDir);
 const store = new JsonStore(dataDir);
 const workspaceService = new WorkspaceService(store);
-const botService = new BotService(store);
+const skillLibrary = new SkillLibrary({ install: true });
+const botService = new BotService(store, skillLibrary);
 const settingsService = new SettingsService(store);
 const authService = new AuthService(store);
 const giteeProjects = new GiteeProjectsStore(dataDir);
+const giteeIntegration = new GiteeIntegrationService(dataDir, giteeProjects);
 const acceptanceService = new AcceptanceService(dataDir, giteeProjects);
 const acceptanceRunner = new AcceptanceRunner(acceptanceService);
 
@@ -154,18 +163,34 @@ const ticketService = new TicketService(
   giteeProjects,
   taskBoard,
 );
+const ticketPulls = new TicketPullScheduleService(dataDir, ticketService);
+const agentSchedules = new AgentScheduleService(dataDir, {
+  listBots: () => botService.list(),
+  getWorkspace: (id) => workspaceService.get(id),
+  createTopic: (input) => chatService.createTopic(input),
+  startBot: (input) =>
+    botRunService.start({
+      topicId: input.topicId,
+      botId: input.botId,
+      origin: "chat",
+      prompt: input.prompt,
+    }),
+});
 
 const router = createRouter();
 registerWorkspaceRoutes(router, workspaceService);
-registerBotRoutes(router, botService, workspaceService);
+registerBotRoutes(router, botService);
 registerTopicRoutes(router, chatService);
 registerPipelineRoutes(router, pipelineService);
 registerClarificationRoutes(router, clarificationService);
 registerSettingsRoutes(router, settingsService);
+registerGiteeIntegrationRoutes(router, giteeIntegration);
 registerControlRoutes(router, appControl, schedules, dataDir);
 registerAuthRoutes(router, authService);
 registerBoardRoutes(router, taskBoard);
 registerTicketRoutes(router, ticketService);
+registerTicketPullRoutes(router, ticketPulls);
+registerAgentScheduleRoutes(router, agentSchedules);
 registerAcceptanceRoutes(router, {
   store,
   workspaces: workspaceService,
@@ -176,25 +201,23 @@ registerAcceptanceRoutes(router, {
 server.listen(PORT, HOST, () => {
   console.log(`Runtime listening on http://${HOST}:${PORT}`);
   schedules.start();
+  ticketPulls.startLoop();
+  agentSchedules.startLoop();
   void (async () => {
     const bots = await botService.ensurePipelineTeam();
     console.log(
       `Bots ready: ${bots.map((b) => `${b.name}(${b.role})`).join(", ")}`,
     );
 
-    const workspaces = await workspaceService.list();
-    for (const ws of workspaces) {
-      const seeded = await seedBundledSkills(ws.localPath);
-      if (seeded.length > 0) {
-        console.log(
-          `Skills seeded into ${ws.localPath}: ${seeded.join(", ")}`,
-        );
-      }
-      const missing = findMissingSkills(bots, ws.localPath);
-      for (const m of missing) {
-        console.warn(
-          `[skills] missing $${m.skillId} for ${m.botName}(${m.botRole}) under ${ws.localPath}`,
-        );
+    for (const bot of bots) {
+      for (const skill of bot.skills ?? []) {
+        if (skill.status === "failed") {
+          console.warn(
+            `[skills] ${bot.name}($${skill.id}): ${skill.error ?? "未安装"}`,
+          );
+        } else if (skill.localPath) {
+          console.log(`[skills] ${bot.name} $${skill.id} -> ${skill.localPath}`);
+        }
       }
     }
   })();

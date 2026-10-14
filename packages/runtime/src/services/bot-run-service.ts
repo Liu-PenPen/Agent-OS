@@ -8,6 +8,10 @@ import { resolveAdapter } from "../cli/resolve-adapter.js";
 import { CliEngineUnavailableError } from "../cli/errors.js";
 import type { CliAdapter } from "../cli/types.js";
 import { buildBotPrompt } from "./bot-prompt.js";
+import {
+  refreshSkillBindings,
+  skillNotReadyMessage,
+} from "./skill-install.js";
 import { normalizeToolName } from "@ml-aos/shared";
 
 /** Ignore a later full-message replay so the bubble is not pasted twice. */
@@ -347,7 +351,12 @@ export class BotRunService {
     let settled = false;
     const toolCalls: { name: string; input?: unknown }[] = [];
     const adapter = await this.pickAdapter(bot.defaultEngine);
-    const prompt = buildBotPrompt(bot, req.prompt);
+    const skills = refreshSkillBindings(bot.skills);
+    const blocked = skillNotReadyMessage(skills);
+    if (blocked) {
+      throw new Error(blocked);
+    }
+    const prompt = buildBotPrompt({ ...bot, skills }, req.prompt);
     try {
       for await (const event of adapter.run({
         prompt,

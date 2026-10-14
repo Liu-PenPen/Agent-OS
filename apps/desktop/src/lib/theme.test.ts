@@ -6,6 +6,11 @@ describe("applyTheme", () => {
     document.documentElement.removeAttribute("data-theme");
   });
 
+  it("applies warm", () => {
+    applyTheme("warm");
+    expect(document.documentElement.dataset.theme).toBe("warm");
+  });
+
   it("applies light", () => {
     applyTheme("light");
     expect(document.documentElement.dataset.theme).toBe("light");

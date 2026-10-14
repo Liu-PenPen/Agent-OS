@@ -5,7 +5,7 @@ import { STAGE_ROLES, resolveStageBotIds } from "./pipeline-bots.js";
 function bot(partial: Partial<BotConfig> & Pick<BotConfig, "id" | "role">): BotConfig {
   return {
     name: partial.name ?? partial.id,
-    defaultEngine: "mock",
+    defaultEngine: "claude",
     instructions: "",
     enabled: true,
     ...partial,

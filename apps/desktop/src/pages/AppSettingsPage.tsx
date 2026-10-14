@@ -1,39 +1,52 @@
 import { useEffect, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import type { AppSettings, EngineKind } from "@ml-aos/shared";
-import { api } from "../lib/api";
+import {
+  api,
+  type GiteeIntegrationSettings,
+  type UpdateGiteeIntegrationInput,
+} from "../lib/api";
 import type { ThemeMode } from "../lib/theme";
 import { pickFolder } from "../lib/tauri";
 import type { AppOutletContext } from "../lib/app-context";
 
-const THEMES: ThemeMode[] = ["dark", "light", "system"];
-const ENGINES: EngineKind[] = ["mock", "claude", "codex"];
+const THEMES: ThemeMode[] = ["warm", "light", "dark", "system"];
+const ENGINES: EngineKind[] = ["claude", "codex"];
 
 const THEME_LABEL: Record<ThemeMode, string> = {
+  warm: "暖色",
   dark: "深色",
   light: "浅色",
   system: "跟随系统",
 };
 
+const TOKEN_PLACEHOLDER = "••••";
+
 export function AppSettingsPage() {
   const { theme, onThemeChange } = useOutletContext<AppOutletContext>();
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [gitee, setGitee] = useState<GiteeIntegrationSettings | null>(null);
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [enterpriseId, setEnterpriseId] = useState("");
+  const [userId, setUserId] = useState("");
+  const [apiBase, setApiBase] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .getSettings()
-      .then((s) => {
-        if (!cancelled) setSettings(s);
+    Promise.all([api.getSettings(), api.getGiteeIntegration()])
+      .then(([s, integration]) => {
+        if (cancelled) return;
+        setSettings(s);
+        applyGiteeView(integration);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setStatus(err instanceof Error ? err.message : "加载失败");
           setSettings({
             theme,
-            defaultEngine: "mock",
+            defaultEngine: "claude",
             dataDir: "",
             notifications: true,
           });
@@ -43,6 +56,14 @@ export function AppSettingsPage() {
       cancelled = true;
     };
   }, [theme]);
+
+  function applyGiteeView(integration: GiteeIntegrationSettings) {
+    setGitee(integration);
+    setTokenDraft(integration.tokenMasked ?? "");
+    setEnterpriseId(integration.enterpriseId);
+    setUserId(integration.userId);
+    setApiBase(integration.apiBase);
+  }
 
   async function persist(patch: Partial<AppSettings>) {
     if (!settings) return;
@@ -72,6 +93,77 @@ export function AppSettingsPage() {
     if (path) await persist({ dataDir: path });
   }
 
+  async function persistGitee(extra?: UpdateGiteeIntegrationInput) {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const patch: UpdateGiteeIntegrationInput = {
+        enterpriseId,
+        userId,
+        apiBase,
+        ...extra,
+      };
+      const trimmedToken = tokenDraft.trim();
+      if (
+        trimmedToken &&
+        !trimmedToken.startsWith(TOKEN_PLACEHOLDER) &&
+        trimmedToken !== (gitee?.tokenMasked ?? "")
+      ) {
+        patch.token = trimmedToken;
+      }
+      const saved = await api.patchGiteeIntegration(patch);
+      applyGiteeView(saved);
+      setStatus("Gitee 集成已保存");
+    } catch (err: unknown) {
+      setStatus(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearGiteeToken() {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const saved = await api.patchGiteeIntegration({ clearToken: true });
+      applyGiteeView(saved);
+      setTokenDraft("");
+      setStatus("已清除存档中的 Token（环境变量不受影响）");
+    } catch (err: unknown) {
+      setStatus(err instanceof Error ? err.message : "清除失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testGitee() {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const patch: UpdateGiteeIntegrationInput = {
+        enterpriseId,
+        userId,
+        apiBase,
+      };
+      const trimmedToken = tokenDraft.trim();
+      if (
+        trimmedToken &&
+        !trimmedToken.startsWith(TOKEN_PLACEHOLDER) &&
+        trimmedToken !== (gitee?.tokenMasked ?? "")
+      ) {
+        patch.token = trimmedToken;
+      }
+      const saved = await api.patchGiteeIntegration(patch);
+      applyGiteeView(saved);
+      const result = await api.testGiteeConnection();
+      setStatus(result.message);
+    } catch (err: unknown) {
+      setStatus(err instanceof Error ? err.message : "测试失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!settings) {
     return (
       <div className="page">
@@ -88,9 +180,6 @@ export function AppSettingsPage() {
           <h1>应用偏好</h1>
           <p className="page-lead">全局设置与开发环境配置。</p>
         </div>
-        <Link className="btn-ghost" to="/">
-          返回首页
-        </Link>
       </header>
 
       <section className="panel-form">
@@ -106,7 +195,7 @@ export function AppSettingsPage() {
           >
             {ENGINES.map((engine) => (
               <option key={engine} value={engine}>
-                {engine}
+                {engine === "codex" ? "Codex" : "Claude Code"}
               </option>
             ))}
           </select>
@@ -143,11 +232,122 @@ export function AppSettingsPage() {
       </section>
 
       <section className="panel-form">
+        <h2 className="section-title">集成 / Gitee</h2>
+        <p className="field-hint">
+          工单拉取与定时调度需要企业 Token。在 Gitee 企业版创建私人令牌后填入下方；也可在仓库根目录的
+          <code> .env </code>
+          配置（开发用，勿提交）。环境变量优先于本页存档。
+        </p>
+        <p className="field-hint">
+          如何获取：打开 Gitee 企业版 → 私人令牌 / Access Token，复制 token；企业 ID
+          与用户 ID 可在企业设置或 API 文档中查看。推荐环境变量名：
+          <code>ML_AOS_GITEE_TOKEN</code>、<code>ML_AOS_GITEE_ENTERPRISE_ID</code>、
+          <code>ML_AOS_GITEE_USER_ID</code>。
+        </p>
+
+        {gitee?.envOverridesActive ? (
+          <p className="form-status">
+            当前有环境变量覆盖存档（
+            {[
+              gitee.sources.token === "env" ? "token" : null,
+              gitee.sources.enterpriseId === "env" ? "enterpriseId" : null,
+              gitee.sources.userId === "env" ? "userId" : null,
+              gitee.sources.apiBase === "env" ? "apiBase" : null,
+            ]
+              .filter(Boolean)
+              .join("、")}
+            ）。测连通与工单将以环境变量为准。
+          </p>
+        ) : null}
+
+        <label className="field">
+          <span>Access Token</span>
+          <input
+            type="password"
+            autoComplete="off"
+            placeholder={gitee?.tokenSet ? "已保存，留空或保持遮罩则不修改" : "粘贴 Gitee Token"}
+            value={tokenDraft}
+            disabled={busy}
+            onChange={(e) => setTokenDraft(e.target.value)}
+            onFocus={() => {
+              if (tokenDraft.startsWith(TOKEN_PLACEHOLDER)) setTokenDraft("");
+            }}
+          />
+        </label>
+        <label className="field">
+          <span>企业 ID</span>
+          <input
+            className="mono"
+            value={enterpriseId}
+            disabled={busy}
+            onChange={(e) => setEnterpriseId(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>用户 ID</span>
+          <input
+            className="mono"
+            value={userId}
+            disabled={busy}
+            onChange={(e) => setUserId(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>API Base（可选）</span>
+          <input
+            className="mono"
+            value={apiBase}
+            disabled={busy}
+            onChange={(e) => setApiBase(e.target.value)}
+          />
+        </label>
+
+        <div className="form-actions">
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={busy || !gitee?.tokenSet}
+            onClick={() => void clearGiteeToken()}
+          >
+            清除存档 Token
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={busy}
+            onClick={() => void testGitee()}
+          >
+            测试连接
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={busy}
+            onClick={() => void persistGitee()}
+          >
+            保存 Gitee 配置
+          </button>
+        </div>
+
+        <h3 className="section-title" style={{ marginTop: 8 }}>
+          项目绑定
+        </h3>
+        <p className="field-hint">
+          登录后项目列表优先从 Gitee 拉取。本地工作目录与参与 Bot 在工作台工单面板配置。可选白名单文件：
+          <code className="mono"> {gitee?.projectsConfigPath ?? "（加载中）"} </code>
+          {gitee?.projectsConfigViaEnv
+            ? "（由环境变量 GITEE_PROJECTS_CONFIG / ML_AOS_GITEE_PROJECTS_CONFIG 覆盖）"
+            : "（默认位于数据目录；仓库内仅保留 example）"}
+          {gitee != null ? ` · 白名单条目 ${gitee.allowlistCount}` : null}
+        </p>
+      </section>
+
+      <section className="panel-form">
         <h2 className="section-title">界面</h2>
         <div className="settings-row">
           <div>
             <strong>外观</strong>
-            <p className="field-hint">在深色与浅色高对比模式之间切换。</p>
+            <p className="field-hint">默认暖色。也可切换浅色、深色，或跟随系统。</p>
           </div>
           <div className="segmented" role="group" aria-label="主题">
             {THEMES.map((mode) => (

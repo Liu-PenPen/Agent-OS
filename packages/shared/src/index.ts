@@ -4,6 +4,7 @@ export type {
   PipelineStage,
   AppSettings,
   BotConfig,
+  SkillBinding,
   Workspace,
   Topic,
   MessageAuthor,

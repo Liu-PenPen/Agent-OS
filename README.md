@@ -2,9 +2,22 @@
 
 Desktop workbench for multi-bot local agents: workspaces, topic chat, dispatch pipelines, and clarification HITL. Phase 1 ships a Tauri + React UI and a Node runtime on `127.0.0.1:17890`.
 
+**License:** [MIT](./LICENSE)
+
 This repo is **independent of agent-os** — no shared runtime, no Feishu, no coupling to that codebase. Secrets stay out of the tree; Claude/Codex use their own user-level CLI logins.
 
-**Spec / plan:** [desktop design](docs/superpowers/specs/2026-09-20-ml-aos-desktop-design.md) · [phase-1 plan](docs/superpowers/plans/2026-09-20-ml-aos-phase1.md)
+**Product / decisions:** [PRODUCT.md](./PRODUCT.md) · [GLOSSARY.md](./GLOSSARY.md) · [adr/](./adr/)
+
+### Gitee credentials (optional)
+
+工单 / 定时拉单需要 Gitee 企业凭证。仓库只提交 [`.env.example`](.env.example) 与 [`config/gitee-projects.example.json`](config/gitee-projects.example.json)；真实 token、企业 ID、项目白名单不要提交。
+
+双通道（**环境变量优先**于设置页存档）：
+
+1. **设置 → 应用偏好 → 集成 / Gitee**（推荐桌面用户；写入 `dataDir/gitee-credentials.json`，UI 遮罩 token）
+2. **本机 `.env` / 环境变量**（适合克隆源码开发）：`ML_AOS_GITEE_TOKEN`、`ML_AOS_GITEE_ENTERPRISE_ID`、`ML_AOS_GITEE_USER_ID`（旧名 `MI_CLAW_*` / `GITEE_USER_ID` 仍可读）
+
+未配置时工作台与对话仍可用；仅 Gitee 相关能力提示去设置。可用设置页「测试连接」验证。
 
 ## Requirements
 
@@ -94,4 +107,4 @@ pnpm test
 
 ## Phase 1 acceptance
 
-See the checklist in [`.superpowers/sdd/task-12-report.md`](.superpowers/sdd/task-12-report.md) (spec §7).
+本地跑通：`pnpm test`，以及 `pnpm dev:runtime` + `pnpm dev:ui`（或 `pnpm tauri`）完成工作区 / 话题 / 引擎冒烟。架构决策见 [adr/](./adr/)。

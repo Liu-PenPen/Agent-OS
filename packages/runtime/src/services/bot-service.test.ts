@@ -10,7 +10,7 @@ async function emptyState(dataDir: string): Promise<AppState> {
   return {
     settings: {
       theme: "dark",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       dataDir,
       notifications: true,
     },
@@ -37,7 +37,7 @@ describe("BotService", () => {
     const bot = await svc.create({
       name: "Dev Bot",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "code",
       enabled: true,
     });
@@ -54,7 +54,7 @@ describe("BotService", () => {
     const bot = await svc.create({
       name: "A",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });

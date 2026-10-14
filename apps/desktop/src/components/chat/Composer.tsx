@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BotConfig } from "@ml-aos/shared";
-import { IconAt, IconSend } from "../shell/icons";
+import { IconArrowUp, IconAt, IconChevronDown } from "../shell/icons";
 
 type ComposerProps = {
   bots: BotConfig[];
@@ -8,7 +8,6 @@ type ComposerProps = {
   sending?: boolean;
   onSend: (content: string, mentionBotId?: string) => void;
   onAbort: () => void;
-  onDispatch: () => void;
 };
 
 export function Composer({
@@ -22,7 +21,25 @@ export function Composer({
   const [mentionBotId, setMentionBotId] = useState<string | undefined>();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [filter, setFilter] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const footer = footerRef.current;
+    const host = footer?.closest(".home-center");
+    if (!footer || !(host instanceof HTMLElement)) return;
+    const apply = () => {
+      host.style.setProperty(
+        "--composer-space",
+        `${footer.offsetHeight + 20}px`,
+      );
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, []);
 
   const mentioned = useMemo(
     () => bots.find((b) => b.id === mentionBotId),
@@ -41,6 +58,14 @@ export function Composer({
   }, [bots, filter]);
 
   useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const next = expanded ? Math.min(el.scrollHeight, 160) : Math.min(el.scrollHeight, 72);
+    el.style.height = `${Math.max(next, 48)}px`;
+  }, [text, expanded]);
+
+  useEffect(() => {
     if (!mentionBotId) return;
     if (!bots.some((b) => b.id === mentionBotId && b.enabled)) {
       setMentionBotId(undefined);
@@ -57,7 +82,7 @@ export function Composer({
     setPickerOpen(false);
     setFilter("");
     setText((prev) => {
-      const withoutTrailingAt = prev.replace(/@[\w-]*$/, "").trimEnd();
+      const withoutTrailingAt = prev.replace(/@[^\s@]*$/, "").trimEnd();
       return withoutTrailingAt ? `${withoutTrailingAt} ` : "";
     });
     textareaRef.current?.focus();
@@ -65,7 +90,7 @@ export function Composer({
 
   function handleChange(value: string) {
     setText(value);
-    const atMatch = value.match(/@([\w-]*)$/);
+    const atMatch = value.match(/@([^\s@]*)$/);
     if (atMatch) {
       setPickerOpen(true);
       setFilter(atMatch[1] ?? "");
@@ -85,7 +110,7 @@ export function Composer({
   }
 
   return (
-    <footer className="composer">
+    <footer className="composer" ref={footerRef}>
       <div className="composer-box">
         {mentioned ? (
           <div className="mention-chip-row">
@@ -122,8 +147,8 @@ export function Composer({
 
         <textarea
           ref={textareaRef}
-          rows={3}
-          placeholder="向智能体发消息，输入 @ 可提及…"
+          rows={1}
+          placeholder="随心输入，用 @ 提及智能体；@Bot /compact 可整理上下文…"
           aria-label="输入框"
           value={text}
           disabled={disabled}
@@ -145,19 +170,17 @@ export function Composer({
           <div className="composer-tools">
             <button
               type="button"
-              className="icon-btn"
+              className="composer-tool"
               disabled={disabled}
               onClick={() => openPicker(false)}
               aria-label="提及智能体"
               title="提及"
             >
-              <IconAt />
+              <IconAt size={16} />
             </button>
-          </div>
-          <div className="composer-send-row">
             <button
               type="button"
-              className="btn-abort"
+              className="composer-quiet"
               disabled={disabled}
               onClick={onAbort}
             >
@@ -165,14 +188,25 @@ export function Composer({
             </button>
             <button
               type="button"
-              className="btn-primary btn-send"
-              disabled={disabled || sending || !text.trim()}
-              onClick={handleSend}
+              className={`composer-tool composer-fold${expanded ? " is-open" : ""}`}
+              onClick={() => setExpanded((open) => !open)}
+              aria-expanded={expanded}
+              aria-label={expanded ? "收起输入框" : "展开输入框"}
+              title={expanded ? "收起" : "展开"}
             >
-              {sending ? "发送中…" : "发送"}
-              <IconSend />
+              <IconChevronDown />
             </button>
           </div>
+          <button
+            type="button"
+            className="composer-send"
+            disabled={disabled || sending || !text.trim()}
+            onClick={handleSend}
+            aria-label={sending ? "发送中" : "发送"}
+            title="发送"
+          >
+            <IconArrowUp />
+          </button>
         </div>
       </div>
       <p className="composer-hint">

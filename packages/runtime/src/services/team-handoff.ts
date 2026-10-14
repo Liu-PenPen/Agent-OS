@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { ChatMessage, DispatchTaskRequest } from "@ml-aos/shared";
 import { findDispatchTaskRequest } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
@@ -34,7 +36,11 @@ export class TeamHandoff {
       info.req.origin === "handoff" || info.req.origin === "resume";
 
     // CEO team-leader-guard (agent-os): tool → correction → fallback.
+    // inCollaboration only for report-back (origin=handoff/resume), NOT ticket kickoff.
     if (role === "ceo") {
+      const defaultTargetBotId = await this.defaultDispatchTarget(
+        info.req.topicId,
+      );
       const outcome = resolveTeamLeaderDispatch({
         role,
         inCollaboration,
@@ -42,6 +48,7 @@ export class TeamHandoff {
         answer: content,
         toolCalls: info.result.toolCalls,
         alreadyCorrected: info.req.origin === "correction",
+        defaultTargetBotId,
       });
 
       if (outcome.source === "retry" && outcome.correctionPrompt) {
@@ -94,6 +101,59 @@ export class TeamHandoff {
     request: DispatchTaskRequest,
   ): Promise<void> {
     await this.control?.dispatchTask(topicId, from, request);
+  }
+
+  /**
+   * Prefer product, else developer among enabled bots.
+   * When the topic has a Gitee Cast, only pick roles in that Cast (skip ceo).
+   */
+  private async defaultDispatchTarget(topicId: string): Promise<string> {
+    const list = await this.bots.list();
+    const enabled = list.filter((b) => b.enabled);
+    const cast = await this.topicCast(topicId);
+    const pool =
+      cast && cast.length > 0
+        ? enabled.filter((bot) =>
+            cast.some(
+              (token) =>
+                token === bot.id ||
+                token.toLowerCase() === bot.role.toLowerCase(),
+            ),
+          )
+        : enabled;
+    for (const preferred of ["product", "developer", "tester", "reviewer"]) {
+      const hit = pool.find((bot) => bot.role.toLowerCase() === preferred);
+      if (hit) return hit.role.toLowerCase();
+    }
+    const other = pool.find((bot) => bot.role.toLowerCase() !== "ceo");
+    if (other) return other.id;
+    if (enabled.some((bot) => bot.role.toLowerCase() === "product")) {
+      return "product";
+    }
+    if (enabled.some((bot) => bot.role.toLowerCase() === "developer")) {
+      return "developer";
+    }
+    return "product";
+  }
+
+  private async topicCast(topicId: string): Promise<string[] | null> {
+    try {
+      const raw = await readFile(
+        join(this.store.getDir(), "gitee-dispatches.json"),
+        "utf-8",
+      );
+      const parsed = JSON.parse(raw) as {
+        byIssueId?: Record<string, { topicId?: string; cast?: string[] }>;
+      };
+      for (const row of Object.values(parsed.byIssueId ?? {})) {
+        if (row.topicId === topicId && Array.isArray(row.cast)) {
+          return row.cast;
+        }
+      }
+    } catch {
+      // no dispatch file / parse error → unconstrained
+    }
+    return null;
   }
 
   private async reportToCeo(

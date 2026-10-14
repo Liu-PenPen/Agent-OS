@@ -2,11 +2,33 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ChatMessage } from "@ml-aos/shared";
 import { api } from "../lib/api";
+import { useShell } from "../lib/shell-context";
 import { IconAlert } from "../components/shell/icons";
+import { AppToolCard, type ControlDecision } from "../components/chat/AppToolCard";
+
+function queueTitle(message: ChatMessage): string {
+  if (message.clarification?.prompt) {
+    return message.clarification.prompt.slice(0, 72) || "澄清请求";
+  }
+  if (message.appTool) {
+    return (
+      message.appTool.title ||
+      message.appTool.summary ||
+      message.content ||
+      "待确认"
+    ).slice(0, 72);
+  }
+  return "待确认";
+}
+
+function queueKey(message: ChatMessage): string {
+  return message.clarification?.id ?? message.appTool?.token ?? message.id;
+}
 
 export function ClarificationQueuePage() {
+  const { refreshPending } = useShell();
   const [items, setItems] = useState<ChatMessage[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -14,16 +36,17 @@ export function ClarificationQueuePage() {
   const refresh = useCallback(async () => {
     const list = await api.listClarifications("pending");
     setItems(list);
+    // Sync sidebar badge + right-panel toast (shell keeps its own pending cache).
+    await refreshPending();
     return list;
-  }, []);
+  }, [refreshPending]);
 
   useEffect(() => {
     let cancelled = false;
     refresh()
       .then((list) => {
         if (cancelled) return;
-        const first = list[0]?.clarification?.id ?? null;
-        setSelectedId(first);
+        setSelectedKey(list[0] ? queueKey(list[0]) : null);
         setPicked(null);
       })
       .catch((err: unknown) => {
@@ -36,16 +59,34 @@ export function ClarificationQueuePage() {
     };
   }, [refresh]);
 
-  const selected = items.find((m) => m.clarification?.id === selectedId);
+  const selected = items.find((m) => queueKey(m) === selectedKey);
 
-  async function answer(optionId: string) {
-    if (!selectedId) return;
+  async function answerLegacy(optionId: string) {
+    const clarificationId = selected?.clarification?.id;
+    if (!clarificationId) return;
     setBusy(true);
     setStatus(null);
     try {
-      await api.answerClarification(selectedId, optionId);
+      await api.answerClarification(clarificationId, optionId);
       const list = await refresh();
-      setSelectedId(list[0]?.clarification?.id ?? null);
+      setSelectedKey(list[0] ? queueKey(list[0]) : null);
+      setPicked(null);
+      setStatus("已答复");
+    } catch (err: unknown) {
+      setStatus(err instanceof Error ? err.message : "答复失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function answerControl(decision: ControlDecision) {
+    if (!selected?.topicId) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await api.answerControl(selected.topicId, decision);
+      const list = await refresh();
+      setSelectedKey(list[0] ? queueKey(list[0]) : null);
       setPicked(null);
       setStatus("已答复");
     } catch (err: unknown) {
@@ -61,29 +102,25 @@ export function ClarificationQueuePage() {
         <div>
           <p className="muted">队列</p>
           <h1>待确认事项</h1>
-          <p className="page-lead">等待人工答复的智能体澄清请求。</p>
+          <p className="page-lead">等待人工答复的澄清、方案确认与审批。</p>
         </div>
-        <Link className="btn-ghost" to="/">
-          返回首页
-        </Link>
       </header>
 
       <div className="split-pane">
         <ul className="entity-list">
           {items.map((msg) => {
-            const c = msg.clarification;
-            if (!c) return null;
+            const key = queueKey(msg);
             return (
-              <li key={c.id}>
+              <li key={key}>
                 <button
                   type="button"
-                  className={`entity-row queue-row ${selectedId === c.id ? "active" : ""}`}
+                  className={`entity-row queue-row ${selectedKey === key ? "active" : ""}`}
                   onClick={() => {
-                    setSelectedId(c.id);
+                    setSelectedKey(key);
                     setPicked(null);
                   }}
                 >
-                  <strong>{c.prompt.slice(0, 72) || "澄清请求"}</strong>
+                  <strong>{queueTitle(msg)}</strong>
                   <span className="muted">
                     {new Date(msg.createdAt).toLocaleString("zh-CN")}
                   </span>
@@ -97,7 +134,17 @@ export function ClarificationQueuePage() {
         </ul>
 
         <div className="panel-form queue-detail">
-          {selected?.clarification ? (
+          {selected?.appTool ? (
+            <>
+              <AppToolCard message={selected} onDecide={(d) => void answerControl(d)} />
+              {selected.topicId ? (
+                <p className="muted">
+                  所属话题：
+                  <Link to={`/?topic=${selected.topicId}`}>{selected.topicId}</Link>
+                </p>
+              ) : null}
+            </>
+          ) : selected?.clarification ? (
             <>
               <header className="clarification-head">
                 <IconAlert />
@@ -127,7 +174,7 @@ export function ClarificationQueuePage() {
                   className="btn-confirm"
                   disabled={busy || !picked}
                   onClick={() => {
-                    if (picked) void answer(picked);
+                    if (picked) void answerLegacy(picked);
                   }}
                 >
                   确认策略

@@ -10,7 +10,7 @@ async function emptyState(dataDir: string): Promise<AppState> {
   return {
     settings: {
       theme: "dark",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       dataDir,
       notifications: true,
     },
@@ -39,7 +39,7 @@ describe("WorkspaceService", () => {
     ).rejects.toThrow(/localPath/);
   });
 
-  it("clears topic cliSessionId when localPath changes", async () => {
+  it("clears topic cli sessions when localPath changes", async () => {
     const svc = new WorkspaceService(store);
     const ws = await svc.create({
       name: "proj",
@@ -53,6 +53,7 @@ describe("WorkspaceService", () => {
       title: "t",
       createdAt: new Date().toISOString(),
       cliSessionId: "abc",
+      cliSessions: { "bot-1": "sess-1" },
       pipelineStage: "idle",
     });
     await store.save(state);
@@ -62,5 +63,6 @@ describe("WorkspaceService", () => {
     const after = await store.load();
     const topic = after.topics.find((t) => t.id === "topic-1");
     expect(topic?.cliSessionId).toBeUndefined();
+    expect(topic?.cliSessions).toEqual({});
   });
 });

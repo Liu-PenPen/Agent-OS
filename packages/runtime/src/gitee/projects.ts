@@ -28,7 +28,7 @@ const GiteeProjectsFileSchema = z.object({
 const ProjectRuntimeSettingsSchema = z.object({
   localPath: z.string().trim().min(1).optional(),
   defaultEngine: z.enum(["claude", "codex"]).optional(),
-  cast: z.array(TicketRoleSchema).optional(),
+  cast: z.array(z.string().trim().min(1).max(80)).optional(),
   testBaseUrl: z.string().trim().min(1).max(300).optional(),
   testStartCommand: z.string().trim().min(1).max(500).optional(),
 });
@@ -44,25 +44,32 @@ export type ProjectRuntimeSettings = z.infer<typeof ProjectRuntimeSettingsSchema
 export type GiteeProjectConfig = GiteeProjectBase & {
   localPath?: string;
   defaultEngine: "claude" | "codex";
-  cast: TicketRole[];
+  /** Bot id，或旧数据里的角色名（ceo / product / developer / tester / reviewer）。 */
+  cast: string[];
   testBaseUrl?: string;
   testStartCommand?: string;
   /** true when row came from Gitee API rather than local JSON only */
   fromRemote?: boolean;
 };
 
-function defaultConfigPath(): string {
+function defaultConfigPath(dataDir: string): string {
   return (
+    process.env.ML_AOS_GITEE_PROJECTS_CONFIG?.trim() ||
     process.env.GITEE_PROJECTS_CONFIG?.trim() ||
-    resolve(findWorkspaceRoot(), "config", "gitee-projects.json")
+    resolve(dataDir, "gitee-projects.json")
   );
 }
 
 export class GiteeProjectsStore {
   constructor(
     private readonly dataDir: string,
-    private readonly configPath = defaultConfigPath(),
+    private readonly configPath = defaultConfigPath(dataDir),
   ) {}
+
+  /** Absolute path of the local project allowlist JSON. */
+  allowlistPath(): string {
+    return this.configPath;
+  }
 
   private settingsPath(): string {
     return resolve(this.dataDir, "gitee-project-settings.json");
@@ -70,14 +77,24 @@ export class GiteeProjectsStore {
 
   /** Optional local allowlist / aliases. Missing file is OK. */
   async loadLocalAllowlist(): Promise<GiteeProjectBase[]> {
-    try {
-      const raw = await readFile(this.configPath, "utf8");
-      const parsed = GiteeProjectsFileSchema.parse(JSON.parse(raw));
-      return parsed.projects;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw error;
+    const candidates = [this.configPath];
+    // Soft legacy: repo config/gitee-projects.json (do not commit real lists).
+    if (!process.env.GITEE_PROJECTS_CONFIG?.trim() && !process.env.ML_AOS_GITEE_PROJECTS_CONFIG?.trim()) {
+      candidates.push(
+        resolve(findWorkspaceRoot(), "config", "gitee-projects.json"),
+      );
     }
+    for (const path of candidates) {
+      try {
+        const raw = await readFile(path, "utf8");
+        const parsed = GiteeProjectsFileSchema.parse(JSON.parse(raw));
+        return parsed.projects;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
+    }
+    return [];
   }
 
   private async loadSettings(): Promise<

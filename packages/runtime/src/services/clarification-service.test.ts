@@ -14,7 +14,7 @@ async function emptyState(dataDir: string): Promise<AppState> {
   return {
     settings: {
       theme: "dark",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       dataDir,
       notifications: true,
     },
@@ -39,6 +39,18 @@ class ClarifyAdapter implements CliAdapter {
     };
     yield { type: "done", sessionId: "sess-1" };
   }
+}
+
+async function waitForPending(
+  clarifications: ClarificationService,
+  attempts = 80,
+) {
+  for (let i = 0; i < attempts; i++) {
+    const pending = await clarifications.list({ status: "pending" });
+    if (pending.length > 0) return pending;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("Timed out waiting for clarification");
 }
 
 describe("ClarificationService", () => {
@@ -72,7 +84,7 @@ describe("ClarificationService", () => {
     const bot = await botService.create({
       name: "Dev",
       role: "developer",
-      defaultEngine: "mock",
+      defaultEngine: "claude",
       instructions: "",
       enabled: true,
     });
@@ -85,7 +97,7 @@ describe("ClarificationService", () => {
       mentionBotId: botId,
     });
 
-    const pending = await clarifications.list({ status: "pending" });
+    const pending = await waitForPending(clarifications);
     expect(pending).toHaveLength(1);
     expect(pending[0].kind).toBe("clarification");
     expect(pending[0].clarification?.status).toBe("pending");
@@ -97,7 +109,7 @@ describe("ClarificationService", () => {
       mentionBotId: botId,
     });
 
-    const pending = await clarifications.list({ status: "pending" });
+    const pending = await waitForPending(clarifications);
     const clarificationId = pending[0].clarification!.id;
 
     const updated = await clarifications.answer(clarificationId, {
@@ -125,13 +137,16 @@ describe("ClarificationService", () => {
       mentionBotId: botId,
     });
 
+    const pending = await waitForPending(clarifications);
+    // Allow any trailing async bot-run store writes to settle before mutating topic
+    await new Promise((r) => setTimeout(r, 50));
+
     const state = await store.load();
     const topic = state.topics.find((t) => t.id === topicId)!;
     topic.pipelineTaskId = "pipe-1";
     topic.pipelineStage = "developing";
     await store.save(state);
 
-    const pending = await clarifications.list({ status: "pending" });
     await clarifications.answer(pending[0].clarification!.id, {
       optionId: "a",
     });

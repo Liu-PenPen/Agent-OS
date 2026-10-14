@@ -35,6 +35,11 @@ export class JsonStore {
 
   constructor(private readonly dataDir: string) {}
 
+  /** Absolute data directory (bots.json, gitee-dispatches.json, …). */
+  getDir(): string {
+    return this.dataDir;
+  }
+
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const run = this.queue.then(fn, fn);
     this.queue = run.then(
@@ -123,7 +128,7 @@ export class JsonStore {
     } catch (error) {
       if (isEnoent(error)) {
         return AppSettingsSchema.parse({
-          theme: "dark",
+          theme: "warm",
           defaultEngine: "claude",
           dataDir: this.dataDir,
           notifications: true,

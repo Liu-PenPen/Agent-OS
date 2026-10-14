@@ -1,10 +1,9 @@
 import { Link } from "react-router-dom";
 import { useShell } from "../../lib/shell-context";
-import { botInitial, botTone } from "../../lib/bot-style";
+import { BotAvatar } from "../BotAvatar";
 import type { ThemeMode } from "../../lib/theme";
-import { IconSearch, IconSettings } from "./icons";
 
-const CYCLE: ThemeMode[] = ["dark", "light", "system"];
+const CYCLE: ThemeMode[] = ["warm", "light", "dark", "system"];
 
 function nextMode(mode: ThemeMode): ThemeMode {
   const idx = CYCLE.indexOf(mode);
@@ -12,6 +11,7 @@ function nextMode(mode: ThemeMode): ThemeMode {
 }
 
 function label(mode: ThemeMode): string {
+  if (mode === "warm") return "暖色";
   if (mode === "dark") return "深色";
   if (mode === "light") return "浅色";
   return "跟随系统";
@@ -20,54 +20,60 @@ function label(mode: ThemeMode): string {
 interface TopBarProps {
   theme: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
+  showPanelToggle?: boolean;
 }
 
-export function TopBar({ theme, onThemeChange }: TopBarProps) {
-  const { bots, enabledBots } = useShell();
+export function TopBar({ theme, onThemeChange, showPanelToggle = false }: TopBarProps) {
+  const { bots, enabledBots, rightPanelCollapsed, toggleRightPanel } =
+    useShell();
   const online = enabledBots.length;
   const shown = (enabledBots.length > 0 ? enabledBots : bots).slice(0, 4);
 
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden>
-            ML
-          </span>
-          <span className="brand-name">ML AOS</span>
-        </div>
-        <div className="topbar-search">
-          <IconSearch className="topbar-search-icon" />
-          <input
-            type="search"
-            placeholder="搜索工作区…"
-            aria-label="搜索工作区"
-          />
-        </div>
+        <Link to="/" className="brand" style={{ textDecoration: "none", color: "inherit" }} title="返回封面首页">
+          <img className="brand-logo" src="/logo.png" alt="" />
+          <span className="brand-name">MLAOS</span>
+          <span className="brand-divider" aria-hidden />
+          <span className="brand-slogan">智能体操作系统</span>
+        </Link>
       </div>
 
       <div className="topbar-actions">
         <div className="agent-status" title="智能体状态" aria-label="智能体状态">
           <div className="agent-stack">
             {shown.map((bot) => (
-              <span
+              <BotAvatar
                 key={bot.id}
-                className={`agent-avatar tone-${botTone(bot)} ${bot.enabled ? "online" : "idle"}`}
+                bot={bot}
+                status={bot.enabled ? "online" : "idle"}
                 title={bot.name}
-              >
-                {botInitial(bot)}
-              </span>
+              />
             ))}
             {shown.length === 0 ? (
               <>
-                <span className="agent-avatar tone-ceo online" />
-                <span className="agent-avatar tone-dev online" />
-                <span className="agent-avatar tone-test idle" />
+                <BotAvatar bot={{ name: "CEO助理", role: "ceo" }} status="online" />
+                <BotAvatar bot={{ name: "开发工程师", role: "developer" }} status="online" />
+                <BotAvatar bot={{ name: "测试工程师", role: "tester" }} status="idle" />
               </>
             ) : null}
           </div>
           <span className="agent-count">{online} 个智能体在线</span>
         </div>
+
+        {showPanelToggle ? (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={toggleRightPanel}
+            title={rightPanelCollapsed ? "展开工单" : "折叠工单"}
+            aria-label={rightPanelCollapsed ? "展开工单" : "折叠工单"}
+            aria-pressed={!rightPanelCollapsed}
+          >
+            {rightPanelCollapsed ? "◧" : "◨"}
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -76,17 +82,12 @@ export function TopBar({ theme, onThemeChange }: TopBarProps) {
           title={`主题：${label(theme)}`}
           aria-label={`主题 ${label(theme)}`}
         >
-          {theme === "light" ? "☀" : theme === "dark" ? "☾" : "◐"}
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+            <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" />
+          </svg>
         </button>
 
-        <Link
-          to="/settings"
-          className="icon-btn"
-          aria-label="设置"
-          title="设置"
-        >
-          <IconSettings />
-        </Link>
       </div>
     </header>
   );

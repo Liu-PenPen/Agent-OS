@@ -1,5 +1,9 @@
 import { comparePriorityThenIdent, priorityRank } from "./priority.js";
 import { extractImageUrls } from "./issue-assets.js";
+import {
+  giteeCredentialsConfigured,
+  resolveGiteeCredentials,
+} from "./credentials.js";
 
 export interface GiteeEnvConfig {
   token: string;
@@ -65,34 +69,15 @@ interface PagedIssues {
   total_count?: number;
 }
 
-const DEFAULT_API_BASE = "https://api.gitee.com/enterprises";
 const MCP_USER_AGENT = "mcp-gitee-ent ml-aos Go/windows/amd64/node";
 
+/** @deprecated Prefer resolveGiteeCredentials — kept for call-site compatibility. */
 export function readGiteeEnvConfig(): GiteeEnvConfig {
-  const token =
-    process.env.MI_CLAW_GITEE_TOKEN?.trim() ||
-    process.env.GITEE_ENT_MCP_ACCESS_TOKEN?.trim() ||
-    "";
-  const enterpriseId = process.env.MI_CLAW_GITEE_ENTERPRISE_ID?.trim() || "";
-  const userId = process.env.GITEE_USER_ID?.trim() || "";
-  const apiBase = (
-    process.env.GITEE_ENT_API_BASE?.trim() || DEFAULT_API_BASE
-  ).replace(/\/$/, "");
-  if (!token) {
-    throw new Error("缺少 MI_CLAW_GITEE_TOKEN（或 GITEE_ENT_MCP_ACCESS_TOKEN）");
-  }
-  if (!enterpriseId) throw new Error("缺少 MI_CLAW_GITEE_ENTERPRISE_ID");
-  if (!userId) throw new Error("缺少 GITEE_USER_ID");
-  return { token, enterpriseId, userId, apiBase };
+  return resolveGiteeCredentials();
 }
 
 export function giteeConfigured(): boolean {
-  try {
-    readGiteeEnvConfig();
-    return true;
-  } catch {
-    return false;
-  }
+  return giteeCredentialsConfigured();
 }
 
 function isTodoState(title: string): boolean {

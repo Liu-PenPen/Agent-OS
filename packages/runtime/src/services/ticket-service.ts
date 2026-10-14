@@ -196,10 +196,25 @@ export class TicketService {
       title: `${detail.ident} ${detail.title}`.slice(0, 120),
     });
 
+    const castMembers = bots.filter(
+      (bot) =>
+        bot.enabled &&
+        project.cast.some(
+          (token) =>
+            token === bot.id ||
+            token.toLowerCase() === bot.role.toLowerCase(),
+        ),
+    );
     const castLabel =
-      project.cast.length > 0
-        ? project.cast.join("、")
-        : "全团队（未限制 Cast）";
+      project.cast.length === 0
+        ? "全团队（未限制 Cast）"
+        : castMembers.length > 0
+          ? castMembers
+              .map((bot) => `${bot.name}（targetBotId=${bot.id}）`)
+              .join("、")
+          : project.cast.join("、");
+    const castHas = (role: string) =>
+      castMembers.some((bot) => bot.role.toLowerCase() === role);
 
     const descriptionBlock = detail.description.trim()
       ? detail.description.trim()
@@ -241,9 +256,12 @@ export class TicketService {
       ...imageLines,
       "",
       project.cast.length > 0
-        ? `约束：后续 dispatch_task 只能派给 Cast 内角色（${castLabel}）；不要派给名单外成员。`
+        ? `约束：后续 dispatch_task 只能派给 Cast 内成员（${castLabel}）；不要派给名单外成员。`
         : "可按需派给 product / developer / tester / reviewer。",
-      "请先阅读描述与附图（及用户补充，若有），确认范围与优先级，再按需调用 dispatch_task；不要自己写代码。",
+      castHas("developer") && !castHas("product")
+        ? "这是已指派的缺陷/工程工单且 Cast 含 developer、不含 product：读完描述后必须立刻调用 dispatch_task，targetBotId=developer（可用 objective/instruction 写清修复点）。禁止长篇分析后让用户手工开工。"
+        : "请先阅读描述与附图（及用户补充，若有），确认范围后立刻调用 dispatch_task；新需求优先 product，已明确的修复任务优先 developer。",
+      "禁止写「启动流水线」或让用户点不存在的按钮；口头「已交给某某」无效。不要自己写代码。",
     ].join("\n");
 
     await this.store.transact((state) => {
@@ -268,10 +286,14 @@ export class TicketService {
       });
     });
 
+    // Must be "chat" (not "handoff"): handoff marks inCollaboration and skips
+    // team-leader-guard, so CEO can dump analysis without dispatch_task.
+    // clearSession: avoid resuming a prior analysis session that never dispatched.
     await this.botRunService.start({
       topicId: topic.id,
       botId: ceo.id,
-      origin: "handoff",
+      origin: "chat",
+      clearSession: true,
       prompt,
     });
 

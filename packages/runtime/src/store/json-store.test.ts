@@ -16,7 +16,7 @@ describe("JsonStore", () => {
     const empty: AppState = {
       settings: {
         theme: "dark",
-        defaultEngine: "mock",
+        defaultEngine: "claude",
         dataDir: dir,
         notifications: true,
       },

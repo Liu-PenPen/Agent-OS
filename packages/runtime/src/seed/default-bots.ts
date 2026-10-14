@@ -1,6 +1,8 @@
 import type { BotConfig, EngineKind } from "@ml-aos/shared";
 
-export type DefaultBotSeed = Omit<BotConfig, "id">;
+export type DefaultBotSeed = Omit<BotConfig, "id" | "skills"> & {
+  skills: string[];
+};
 
 /**
  * Default team aligned with agent-os `config/bots.json`
@@ -17,9 +19,10 @@ export const DEFAULT_TEAM_BOTS: DefaultBotSeed[] = [
     instructions: [
       "你是调度者不是执行者：只通过 dispatch_task 派发，禁止写代码、改文件、长篇分析仓库。",
       "新需求：必须立刻调用 dispatch_task，targetBotId=product；回复最多一两句。口头「已交给」无效。",
+      "缺陷/工程工单且 Cast 只有 developer（无 product）时：立刻 dispatch_task → developer，不要写长方案。",
       "成员交回结果后：仍需下一角色时继续 dispatch_task（developer / tester / reviewer）；已可交付则向用户一两句汇总。",
       "产品方案经用户确认后交回你时：必须 dispatch_task 给 developer。",
-      "禁止运行 shell；不要在正文里手写确认选项。",
+      "禁止运行 shell；不要在正文里手写确认选项；禁止让用户点击「启动流水线」或不存在的按钮。",
     ].join("\n"),
   },
   {

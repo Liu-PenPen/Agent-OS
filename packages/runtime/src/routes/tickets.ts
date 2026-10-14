@@ -1,7 +1,6 @@
 import type { RouteHandler } from "../http/router.js";
 import { readJsonBody, sendError, sendJson } from "../http/json.js";
 import type { TicketService } from "../services/ticket-service.js";
-import type { TicketRole } from "../gitee/projects.js";
 
 function parseIssueKey(issueKey: string): number {
   const key = issueKey.trim();
@@ -31,7 +30,7 @@ export function registerTicketRoutes(
       sendJson(res, 200, projects);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bad request";
-      const status = /缺少|MI_CLAW|GITEE_|无法从 Gitee/i.test(message)
+      const status = /缺少|MI_CLAW|ML_AOS_GITEE|GITEE_|无法从 Gitee/i.test(message)
         ? 503
         : 500;
       sendError(res, status, message);
@@ -43,7 +42,7 @@ export function registerTicketRoutes(
       const body = await readJsonBody<{
         localPath?: string;
         defaultEngine?: "claude" | "codex";
-        cast?: TicketRole[];
+        cast?: string[];
         testBaseUrl?: string;
         testStartCommand?: string;
       }>(req);
@@ -65,7 +64,7 @@ export function registerTicketRoutes(
       sendJson(res, 200, todos);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Bad request";
-      const status = /缺少|MI_CLAW|GITEE_/.test(message)
+      const status = /缺少|MI_CLAW|ML_AOS_GITEE|GITEE_/.test(message)
         ? 503
         : /不存在/i.test(message)
           ? 404
@@ -85,7 +84,7 @@ export function registerTicketRoutes(
         sendJson(res, 200, detail);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Bad request";
-        const status = /缺少|MI_CLAW|GITEE_/.test(message)
+        const status = /缺少|MI_CLAW|ML_AOS_GITEE|GITEE_/.test(message)
           ? 503
           : /不存在|无效|404/i.test(message)
             ? 404
@@ -104,7 +103,7 @@ export function registerTicketRoutes(
         sendJson(res, 200, states);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Bad request";
-        const status = /缺少|MI_CLAW|GITEE_/.test(message)
+        const status = /缺少|MI_CLAW|ML_AOS_GITEE|GITEE_/.test(message)
           ? 503
           : /不存在|无效|404|需使用数字 id/i.test(message)
             ? 404
@@ -134,7 +133,7 @@ export function registerTicketRoutes(
         sendJson(res, 200, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Bad request";
-        const status = /缺少|MI_CLAW|GITEE_/.test(message)
+        const status = /缺少|MI_CLAW|ML_AOS_GITEE|GITEE_/.test(message)
           ? 503
           : /不存在|无效|404|需使用数字 id/i.test(message)
             ? 404

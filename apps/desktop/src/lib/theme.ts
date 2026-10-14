@@ -1,4 +1,4 @@
-export type ThemeMode = "dark" | "light" | "system";
+export type ThemeMode = "warm" | "dark" | "light" | "system";
 
 let mediaQuery: MediaQueryList | null = null;
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null;
@@ -20,7 +20,7 @@ function clearSystemListener(): void {
   mediaListener = null;
 }
 
-function setDataTheme(theme: "dark" | "light"): void {
+function setDataTheme(theme: "warm" | "dark" | "light"): void {
   document.documentElement.dataset.theme = theme;
 }
 

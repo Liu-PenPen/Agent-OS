@@ -1,33 +1,46 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { SkillBinding } from "@ml-aos/shared";
+import { parseSkillToken } from "./skill-catalog.js";
 
 const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
-export function normalizeSkillIds(skills: string[] | undefined): string[] {
+export function normalizeSkillIds(
+  skills: Array<string | SkillBinding> | undefined,
+): string[] {
   if (!skills?.length) return [];
   const out: string[] = [];
   for (const raw of skills) {
-    const id = raw.trim().toLowerCase();
+    const id =
+      typeof raw === "string"
+        ? raw.trim().toLowerCase()
+        : raw.id.trim().toLowerCase();
     if (!id || !SKILL_NAME_RE.test(id)) continue;
     if (!out.includes(id)) out.push(id);
   }
   return out;
 }
 
-/** Resolve SKILL.md path for a skill under a workspace (agent-os order). */
-export function resolveSkillPath(
-  workspaceDir: string,
+/** Resolve SKILL.md from the user skill library. Workspace copies are ignored. */
+export function resolveUserSkillPath(
+  homeDir: string,
   skillId: string,
 ): string | undefined {
+  const id = skillId.trim().toLowerCase();
+  if (!id || !SKILL_NAME_RE.test(id)) return undefined;
   const candidates = [
-    join(workspaceDir, ".agents", "skills", skillId, "SKILL.md"),
-    join(workspaceDir, ".claude", "skills", skillId, "SKILL.md"),
-    join(homedir(), ".agents", "skills", skillId, "SKILL.md"),
-    join(homedir(), ".claude", "skills", skillId, "SKILL.md"),
-    join(homedir(), ".codex", "skills", skillId, "SKILL.md"),
+    join(homeDir, ".agents", "skills", id, "SKILL.md"),
+    join(homeDir, ".claude", "skills", id, "SKILL.md"),
+    join(homeDir, ".codex", "skills", id, "SKILL.md"),
   ];
   return candidates.find((p) => existsSync(p));
+}
+
+export function skillEditorToken(skill: string | SkillBinding): string {
+  if (typeof skill === "string") return skill.trim();
+  if (skill.source.includes("@")) return skill.source;
+  return skill.id;
 }
 
 export type MissingSkill = {
@@ -37,14 +50,23 @@ export type MissingSkill = {
 };
 
 export function findMissingSkills(
-  bots: Array<{ name: string; role: string; enabled: boolean; skills?: string[] }>,
-  workspaceDir: string,
+  bots: Array<{
+    name: string;
+    role: string;
+    enabled: boolean;
+    skills?: Array<string | SkillBinding>;
+  }>,
+  homeDir = homedir(),
 ): MissingSkill[] {
   const missing: MissingSkill[] = [];
   for (const bot of bots) {
     if (!bot.enabled) continue;
-    for (const skillId of normalizeSkillIds(bot.skills)) {
-      if (!resolveSkillPath(workspaceDir, skillId)) {
+    for (const skill of bot.skills ?? []) {
+      const parsed = parseSkillToken(
+        typeof skill === "string" ? skill : skill.id,
+      );
+      const skillId = parsed?.id ?? (typeof skill === "string" ? skill : skill.id);
+      if (!parsed || !resolveUserSkillPath(homeDir, parsed.id)) {
         missing.push({
           botName: bot.name,
           botRole: bot.role,

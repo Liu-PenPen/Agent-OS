@@ -20,6 +20,36 @@ import type {
 
 const BASE_URL = "http://127.0.0.1:17890";
 
+export type TicketPullPriority = "severe" | "major" | "none";
+
+export type TicketPullTask = {
+  id: string;
+  projectId: string;
+  everyHours: number;
+  priority: TicketPullPriority;
+  status: "draft" | "active" | "paused";
+  nextRunAt?: string;
+  lastRunAt?: string;
+  lastResult?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentScheduleTask = {
+  id: string;
+  prompt: string;
+  botId: string;
+  workspaceId: string;
+  everyHours: number;
+  status: "draft" | "active" | "paused";
+  topicId?: string;
+  nextRunAt?: string;
+  lastRunAt?: string;
+  lastResult?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 let authToken: string | null =
   typeof window !== "undefined" ? localStorage.getItem("ml_aos_token") : null;
 
@@ -70,6 +100,39 @@ export type CreateBotInput = {
 };
 
 export type UpdateBotInput = Partial<CreateBotInput>;
+
+export type GiteeIntegrationSettings = {
+  configured: boolean;
+  tokenMasked: string | null;
+  tokenSet: boolean;
+  enterpriseId: string;
+  userId: string;
+  apiBase: string;
+  sources: {
+    token: "env" | "store" | "none";
+    enterpriseId: "env" | "store" | "none";
+    userId: "env" | "store" | "none";
+    apiBase: "env" | "store" | "default";
+  };
+  envOverridesActive: boolean;
+  projectsConfigPath: string;
+  projectsConfigViaEnv: boolean;
+  allowlistCount: number;
+};
+
+export type UpdateGiteeIntegrationInput = {
+  token?: string;
+  enterpriseId?: string;
+  userId?: string;
+  apiBase?: string;
+  clearToken?: boolean;
+};
+
+export type GiteeConnectionTestResult = {
+  ok: boolean;
+  message: string;
+  programCount?: number;
+};
 
 export const api = {
   baseUrl: BASE_URL,
@@ -127,6 +190,26 @@ export const api = {
 
   setTheme(theme: ThemeMode): Promise<AppSettings> {
     return this.patchSettings({ theme });
+  },
+
+  getGiteeIntegration(): Promise<GiteeIntegrationSettings> {
+    return request<GiteeIntegrationSettings>("/api/integrations/gitee");
+  },
+
+  patchGiteeIntegration(
+    patch: UpdateGiteeIntegrationInput,
+  ): Promise<GiteeIntegrationSettings> {
+    return request<GiteeIntegrationSettings>("/api/integrations/gitee", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+
+  testGiteeConnection(): Promise<GiteeConnectionTestResult> {
+    return request<GiteeConnectionTestResult>("/api/integrations/gitee/test", {
+      method: "POST",
+      body: "{}",
+    });
   },
 
   listWorkspaces(): Promise<Workspace[]> {
@@ -279,6 +362,57 @@ export const api = {
     });
   },
 
+  listTicketPulls(): Promise<TicketPullTask[]> {
+    return request("/api/ticket-pulls");
+  },
+
+  createTicketPull(body: {
+    projectId: string;
+    everyHours: number;
+    priority: TicketPullPriority;
+  }): Promise<TicketPullTask> {
+    return request("/api/ticket-pulls", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  ticketPullAction(
+    id: string,
+    action: "start" | "pause" | "resume" | "run" | "remove",
+  ): Promise<{ ok: true }> {
+    return request(
+      `/api/ticket-pulls/${encodeURIComponent(id)}/${action}`,
+      { method: "POST", body: "{}" },
+    );
+  },
+
+  listAgentSchedules(): Promise<AgentScheduleTask[]> {
+    return request("/api/agent-schedules");
+  },
+
+  createAgentSchedule(body: {
+    prompt: string;
+    botId: string;
+    workspaceId: string;
+    everyHours: number;
+  }): Promise<AgentScheduleTask> {
+    return request("/api/agent-schedules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  agentScheduleAction(
+    id: string,
+    action: "start" | "pause" | "resume" | "run" | "remove",
+  ): Promise<{ ok: true }> {
+    return request(
+      `/api/agent-schedules/${encodeURIComponent(id)}/${action}`,
+      { method: "POST", body: "{}" },
+    );
+  },
+
   ticketsStatus(): Promise<{ configured: boolean; projectsPath: string }> {
     return request("/api/tickets/status");
   },
@@ -291,7 +425,7 @@ export const api = {
       ident?: string;
       localPath?: string;
       defaultEngine: "claude" | "codex";
-      cast: Array<"ceo" | "product" | "developer" | "tester" | "reviewer">;
+      cast: string[];
       testBaseUrl?: string;
       testStartCommand?: string;
     }>
@@ -304,7 +438,7 @@ export const api = {
     patch: {
       localPath?: string;
       defaultEngine?: "claude" | "codex";
-      cast?: Array<"ceo" | "product" | "developer" | "tester" | "reviewer">;
+      cast?: string[];
       testBaseUrl?: string;
       testStartCommand?: string;
     },
@@ -315,7 +449,7 @@ export const api = {
     ident?: string;
     localPath?: string;
     defaultEngine: "claude" | "codex";
-    cast: Array<"ceo" | "product" | "developer" | "tester" | "reviewer">;
+    cast: string[];
     testBaseUrl?: string;
     testStartCommand?: string;
   }> {

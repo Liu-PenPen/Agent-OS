@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { BotConfig, EngineKind } from "@ml-aos/shared";
 import type { JsonStore } from "../store/json-store.js";
 import { DEFAULT_TEAM_BOTS } from "../seed/default-bots.js";
-import { normalizeSkillIds } from "./skill-paths.js";
+import { skillEditorToken } from "./skill-paths.js";
+import { SkillLibrary } from "./skill-install.js";
 
 export interface CreateBotInput {
   name: string;
@@ -22,29 +23,17 @@ const ROLE_DEFAULT_SKILLS: Record<string, string[]> = {
   reviewer: ["code-review-expert"],
 };
 
-function withSkills(input: CreateBotInput): Omit<BotConfig, "id"> {
-  const roleKey = input.role.trim().toLowerCase();
-  const skills = normalizeSkillIds(
-    input.skills ?? ROLE_DEFAULT_SKILLS[roleKey] ?? [],
-  );
-  return {
-    name: input.name,
-    role: input.role,
-    defaultEngine: input.defaultEngine,
-    instructions: input.instructions,
-    enabled: input.enabled,
-    skills,
-  };
-}
-
 export class BotService {
-  constructor(private readonly store: JsonStore) {}
+  constructor(
+    private readonly store: JsonStore,
+    private readonly skills = new SkillLibrary({ install: false }),
+  ) {}
 
   async list(): Promise<BotConfig[]> {
     const state = await this.store.load();
     return state.bots.map((b) => ({
       ...b,
-      skills: normalizeSkillIds(b.skills),
+      skills: this.skills.refresh(b.skills),
     }));
   }
 
@@ -57,7 +46,12 @@ export class BotService {
     const state = await this.store.load();
     const bot: BotConfig = {
       id: randomUUID(),
-      ...withSkills(input),
+      name: input.name,
+      role: input.role,
+      defaultEngine: input.defaultEngine,
+      instructions: input.instructions,
+      enabled: input.enabled,
+      skills: await this.skills.ensure(input.skills ?? []),
     };
     state.bots.push(bot);
     await this.store.save(state);
@@ -72,20 +66,18 @@ export class BotService {
     }
 
     const current = state.bots[index];
-    const merged: CreateBotInput = {
+    const skillTokens =
+      patch.skills !== undefined
+        ? patch.skills
+        : (current.skills ?? []).map(skillEditorToken);
+    const updated: BotConfig = {
+      id: current.id,
       name: patch.name ?? current.name,
       role: patch.role ?? current.role,
       defaultEngine: patch.defaultEngine ?? current.defaultEngine,
       instructions: patch.instructions ?? current.instructions,
       enabled: patch.enabled ?? current.enabled,
-      skills:
-        patch.skills !== undefined
-          ? patch.skills
-          : (current.skills ?? []),
-    };
-    const updated: BotConfig = {
-      id: current.id,
-      ...withSkills(merged),
+      skills: await this.skills.ensure(skillTokens),
     };
     state.bots[index] = updated;
     await this.store.save(state);
@@ -108,11 +100,14 @@ export class BotService {
    */
   async seedDefaultTeam(): Promise<BotConfig[]> {
     const state = await this.store.load();
-    state.bots = DEFAULT_TEAM_BOTS.map((seed) => ({
-      id: randomUUID(),
-      ...seed,
-      skills: normalizeSkillIds(seed.skills),
-    }));
+    state.bots = [];
+    for (const seed of DEFAULT_TEAM_BOTS) {
+      state.bots.push({
+        id: randomUUID(),
+        ...seed,
+        skills: await this.skills.ensure(seed.skills),
+      });
+    }
     await this.store.save(state);
     return state.bots;
   }
@@ -122,25 +117,23 @@ export class BotService {
     const state = await this.store.load();
     let changed = false;
     for (const bot of state.bots) {
-      const existing = normalizeSkillIds(bot.skills);
-      if (existing.length > 0) {
-        bot.skills = existing;
-        continue;
+      const existing = bot.skills ?? [];
+      const tokens =
+        existing.length > 0
+          ? existing.map(skillEditorToken)
+          : (ROLE_DEFAULT_SKILLS[bot.role.toLowerCase()] ?? []);
+      const next = await this.skills.ensure(tokens);
+      if (JSON.stringify(next) !== JSON.stringify(existing)) {
+        changed = true;
       }
-      const fallback = ROLE_DEFAULT_SKILLS[bot.role.toLowerCase()];
-      if (!fallback?.length) {
-        bot.skills = [];
-        continue;
-      }
-      bot.skills = [...fallback];
-      changed = true;
+      bot.skills = next;
     }
     if (changed) {
       await this.store.save(state);
     }
     return state.bots.map((b) => ({
       ...b,
-      skills: normalizeSkillIds(b.skills),
+      skills: this.skills.refresh(b.skills),
     }));
   }
 

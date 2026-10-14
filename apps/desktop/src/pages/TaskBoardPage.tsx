@@ -119,7 +119,7 @@ export function TaskBoardPage() {
         <div>
           <h1>任务看板</h1>
           <p className="page-lead">
-            对照进行中、已完成与失败的任务；Gitee 改状态请回工单列表操作。
+            查看进行中、已完成与失败的任务；如需修改工单状态，前往工单列表操作。
           </p>
         </div>
         <span

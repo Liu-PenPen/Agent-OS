@@ -32,7 +32,6 @@ export function PipelineDetailPage() {
   const [task, setTask] = useState<PipelineTask | null>(null);
   const [bots, setBots] = useState<BotConfig[]>([]);
   const [status, setStatus] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -61,21 +60,6 @@ export function PipelineDetailPage() {
     return bots.find((b) => b.id === botId)?.name ?? botId;
   }
 
-  async function handleAdvance() {
-    if (!id) return;
-    setBusy(true);
-    setStatus(null);
-    try {
-      const next = await api.advancePipeline(id);
-      setTask(next);
-      setStatus("已推进");
-    } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : "推进失败");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="page">
       <header className="page-header">
@@ -86,16 +70,11 @@ export function PipelineDetailPage() {
             {id ? `ID: ${id}` : "缺少流水线 ID"}
             {task ? ` · ${stageLabel(task.stage)}` : ""}
           </p>
+          <p className="muted">
+            阶段由 CEO 通过 dispatch_task 协作推进，不再提供手动启动/推进。
+          </p>
         </div>
         <div className="form-actions">
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={busy || !task || task.stage === "completed"}
-            onClick={handleAdvance}
-          >
-            推进阶段
-          </button>
           <Link className="btn-ghost" to="/">
             返回首页
           </Link>
@@ -134,7 +113,7 @@ export function PipelineDetailPage() {
         </ol>
       ) : (
         <p className="muted">
-          {status ?? "尚未加载流水线。请先从话题启动流水线。"}
+          {status ?? "尚未加载流水线。请 @CEO 助理并用 dispatch_task 协作。"}
         </p>
       )}
 

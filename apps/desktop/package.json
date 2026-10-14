@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "prepare:bundle": "node ../../scripts/prepare-bundle.mjs",
+    "build:installer": "tauri build",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",

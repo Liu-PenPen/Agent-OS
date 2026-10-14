@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 const HEALTH_HOST: &str = "127.0.0.1";
 const HEALTH_PORT: u16 = 17890;
 const HEALTH_URL_HINT: &str = "http://127.0.0.1:17890/health";
-const HEALTH_WAIT: Duration = Duration::from_secs(10);
+const HEALTH_WAIT: Duration = Duration::from_secs(20);
 const HEALTH_POLL: Duration = Duration::from_millis(250);
 
 /// Holds the child we spawned (if any). Existing external runtimes are left alone.
@@ -26,13 +26,18 @@ impl SidecarState {
   }
 }
 
-pub fn ensure_runtime() -> Result<Option<Child>, String> {
+pub struct SpawnContext {
+  pub resource_dir: Option<PathBuf>,
+  pub app_data_dir: Option<PathBuf>,
+}
+
+pub fn ensure_runtime(ctx: &SpawnContext) -> Result<Option<Child>, String> {
   if health_ok() {
     log::info!("runtime already healthy at {HEALTH_URL_HINT}");
     return Ok(None);
   }
 
-  let mut child = spawn_runtime()?;
+  let mut child = spawn_runtime(ctx)?;
   if let Err(e) = wait_for_health() {
     kill_process_tree(&mut child);
     return Err(e);
@@ -84,30 +89,26 @@ fn wait_for_health() -> Result<(), String> {
   ))
 }
 
-fn spawn_runtime() -> Result<Child, String> {
-  let repo = find_repo_root().ok_or_else(|| {
-    "could not locate ml-aos repo root (looking for packages/runtime)".to_string()
-  })?;
-  let runtime_dir = repo.join("packages").join("runtime");
-  if !runtime_dir.is_dir() {
-    return Err(format!("runtime package missing: {}", runtime_dir.display()));
-  }
-
-  let (program, args, mode) = resolve_spawn_command(&repo, &runtime_dir)?;
+fn spawn_runtime(ctx: &SpawnContext) -> Result<Child, String> {
+  let (program, args, cwd, mode, data_dir) = resolve_spawn(ctx)?;
   log::info!(
     "spawning runtime ({mode}): {} {} (cwd={})",
     program.display(),
     args.join(" "),
-    runtime_dir.display()
+    cwd.display()
   );
 
   let mut cmd = Command::new(&program);
   cmd
     .args(&args)
-    .current_dir(&runtime_dir)
+    .current_dir(&cwd)
     .stdin(Stdio::null())
     .stdout(Stdio::null())
     .stderr(Stdio::null());
+
+  if let Some(dir) = data_dir {
+    cmd.env("ML_AOS_DATA_DIR", dir);
+  }
 
   #[cfg(windows)]
   {
@@ -121,21 +122,104 @@ fn spawn_runtime() -> Result<Child, String> {
     .map_err(|e| format!("failed to spawn runtime ({mode}): {e}"))
 }
 
+fn resolve_spawn(
+  ctx: &SpawnContext,
+) -> Result<(PathBuf, Vec<String>, PathBuf, &'static str, Option<PathBuf>), String> {
+  if let Some(packaged) = resolve_packaged(ctx)? {
+    return Ok(packaged);
+  }
+  resolve_dev()
+}
+
+fn resolve_packaged(
+  ctx: &SpawnContext,
+) -> Result<
+  Option<(PathBuf, Vec<String>, PathBuf, &'static str, Option<PathBuf>)>,
+  String,
+> {
+  let resource_dir = match find_resource_dir(ctx.resource_dir.as_deref()) {
+    Some(dir) => dir,
+    None => return Ok(None),
+  };
+  let entry = resource_dir.join("runtime").join("index.js");
+  if !entry.is_file() {
+    return Ok(None);
+  }
+
+  let node = bundled_node(&resource_dir).ok_or_else(|| {
+    format!(
+      "packaged runtime found at {} but portable Node is missing under resources/node/",
+      entry.display()
+    )
+  })?;
+
+  let cwd = resource_dir.join("runtime");
+  let data_dir = ctx.app_data_dir.as_ref().map(|d| d.join("data"));
+  Ok(Some((
+    node,
+    vec![entry.to_string_lossy().into_owned()],
+    cwd,
+    "packaged node+bundle",
+    data_dir,
+  )))
+}
+
+fn bundled_node(resource_dir: &Path) -> Option<PathBuf> {
+  #[cfg(windows)]
+  let name = "node.exe";
+  #[cfg(not(windows))]
+  let name = "node";
+
+  let candidate = resource_dir.join("node").join(name);
+  if candidate.is_file() {
+    Some(candidate)
+  } else {
+    None
+  }
+}
+
+fn find_resource_dir(explicit: Option<&Path>) -> Option<PathBuf> {
+  let mut candidates: Vec<PathBuf> = Vec::new();
+  if let Some(dir) = explicit {
+    candidates.push(dir.to_path_buf());
+  }
+  if let Ok(exe) = std::env::current_exe() {
+    if let Some(dir) = exe.parent() {
+      candidates.push(dir.join("resources"));
+      candidates.push(dir.to_path_buf());
+    }
+  }
+
+  for dir in candidates {
+    if dir.join("runtime").join("index.js").is_file() {
+      return Some(dir);
+    }
+  }
+  None
+}
+
 /// Prefer production dist; fall back to tsx for local/dev (no dist yet).
-fn resolve_spawn_command(
-  repo: &Path,
-  runtime_dir: &Path,
-) -> Result<(PathBuf, Vec<String>, &'static str), String> {
+fn resolve_dev() -> Result<(PathBuf, Vec<String>, PathBuf, &'static str, Option<PathBuf>), String> {
+  let repo = find_repo_root().ok_or_else(|| {
+    "could not locate ml-aos repo root (looking for packages/runtime)".to_string()
+  })?;
+  let runtime_dir = repo.join("packages").join("runtime");
+  if !runtime_dir.is_dir() {
+    return Err(format!("runtime package missing: {}", runtime_dir.display()));
+  }
+
   let dist_entry = runtime_dir.join("dist").join("index.js");
   if dist_entry.is_file() {
     return Ok((
       PathBuf::from("node"),
       vec![dist_entry.to_string_lossy().into_owned()],
-      "node+dist",
+      runtime_dir,
+      "dev node+dist",
+      None,
     ));
   }
 
-  let tsx_cli = find_tsx_cli(repo, runtime_dir).ok_or_else(|| {
+  let tsx_cli = find_tsx_cli(&repo, &runtime_dir).ok_or_else(|| {
     "runtime dist missing and tsx CLI not found; run `pnpm install` or build dist".to_string()
   })?;
   let entry = runtime_dir.join("src").join("index.ts");
@@ -149,14 +233,24 @@ fn resolve_spawn_command(
       tsx_cli.to_string_lossy().into_owned(),
       entry.to_string_lossy().into_owned(),
     ],
-    "node+tsx (dev)",
+    runtime_dir,
+    "dev node+tsx",
+    None,
   ))
 }
 
 fn find_tsx_cli(repo: &Path, runtime_dir: &Path) -> Option<PathBuf> {
   let candidates = [
-    runtime_dir.join("node_modules").join("tsx").join("dist").join("cli.mjs"),
-    repo.join("node_modules").join("tsx").join("dist").join("cli.mjs"),
+    runtime_dir
+      .join("node_modules")
+      .join("tsx")
+      .join("dist")
+      .join("cli.mjs"),
+    repo
+      .join("node_modules")
+      .join("tsx")
+      .join("dist")
+      .join("cli.mjs"),
   ];
   candidates.into_iter().find(|p| p.is_file())
 }

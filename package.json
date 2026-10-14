@@ -7,6 +7,8 @@
     "test": "pnpm -r test",
     "dev:runtime": "pnpm --filter @ml-aos/runtime dev",
     "dev:ui": "pnpm --filter @ml-aos/desktop dev",
-    "tauri": "pnpm --filter @ml-aos/desktop tauri"
+    "tauri": "pnpm --filter @ml-aos/desktop tauri",
+    "prepare:bundle": "node scripts/prepare-bundle.mjs",
+    "build:desktop": "pnpm --filter @ml-aos/desktop build:installer"
   }
 }

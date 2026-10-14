@@ -2,18 +2,18 @@
 
 Tauri starts the Node Desktop Runtime when `http://127.0.0.1:17890/health` is not OK.
 
-## Spawn resolution (no shell)
+## Resolution order
 
-Working directory: `packages/runtime`.
+1. **Packaged install** (preferred for Releases):  
+   `{resource_dir}/node/node(.exe)` + `{resource_dir}/runtime/index.js`  
+   Prepared by `pnpm prepare:bundle` / `pnpm build:desktop`.  
+   Sets `ML_AOS_DATA_DIR` to `{app_data}/data`.
 
-1. **Production / dist (preferred):**  
-   `node packages/runtime/dist/index.js`  
-   Used when `dist/index.js` exists.
+2. **Dev with dist:**  
+   `node packages/runtime/dist/index.js` when dist exists.
 
-2. **Dev fallback (current default):**  
-   `node <tsx>/dist/cli.mjs packages/runtime/src/index.ts`  
-   Resolves `tsx` from `packages/runtime/node_modules` or the repo-root `node_modules`.  
-   There is no runtime `build`/`dist` script yet, so **dev uses tsx**.
+3. **Dev fallback:**  
+   `node <tsx>/cli.mjs packages/runtime/src/index.ts`
 
 If health is already OK, Tauri does **not** spawn and will **not** kill that external process on exit.
 
@@ -24,6 +24,10 @@ Only a process tree spawned by Tauri is stopped:
 - Windows: `taskkill /PID <pid> /T /F`
 - Other: `Child::kill`
 
-## Bundle note
+## Building an installer
 
-For packaged builds, ship `packages/runtime/dist` (or an equivalent entry) next to the app and ensure `node` is on PATH, or point at a bundled Node binary. This folder is the placeholder for that packaging step.
+```bash
+pnpm build:desktop
+```
+
+This runs `scripts/prepare-bundle.mjs` (esbuild runtime + portable Node download), then `tauri build` (NSIS).

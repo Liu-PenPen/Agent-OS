@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "node ../../scripts/prepare-bundle.mjs && pnpm build"
   },
   "app": {
     "windows": [
@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -33,6 +33,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "resources/runtime/**/*",
+      "resources/node/**/*"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"]
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

@@ -18,7 +18,13 @@ pub fn run() {
         )?;
       }
 
-      match sidecar::ensure_runtime() {
+      let resource_dir = app.path().resource_dir().ok();
+      let app_data_dir = app.path().app_data_dir().ok();
+      let ctx = sidecar::SpawnContext {
+        resource_dir,
+        app_data_dir,
+      };
+      match sidecar::ensure_runtime(&ctx) {
         Ok(Some(child)) => {
           let state = app.state::<SidecarState>();
           *state.child.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);

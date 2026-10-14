@@ -27,7 +27,26 @@ This repo is **independent of agent-os** — no shared runtime, no Feishu, no co
 - Optional: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI on `PATH` (real engine)
 - Optional for native window: Rust toolchain + **MSVC Build Tools** (`link.exe`) on Windows
 
-## Install
+## Download (Windows installer)
+
+安装包通过 GitHub Releases 发布（打 `v*` 标签后自动构建）：
+
+1. 打开 [Releases](https://github.com/Liu-PenPen/MLAOS/releases)
+2. 下载最新的 `ML AOS_x.y.z_x64-setup.exe`（NSIS）
+3. 安装后启动 **ML AOS**；内置便携 Node + runtime，**不必**再装 Node 才能开应用
+4. 在 **设置 → 集成 / Gitee** 填写自己的凭证（或开发时用 `.env`）
+5. 跑真实智能体仍需本机安装并登录 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 或 Codex CLI
+
+本地打安装包（需 Windows + MSVC + 网络以下载便携 Node）：
+
+```bash
+pnpm install
+pnpm build:desktop
+```
+
+产物目录：`apps/desktop/src-tauri/target/release/bundle/nsis/`。
+
+## Install from source
 
 ```bash
 pnpm install

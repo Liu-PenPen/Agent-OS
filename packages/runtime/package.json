@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts",
+    "build": "node scripts/build-bundle.mjs",
     "test": "vitest run"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"

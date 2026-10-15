@@ -22,7 +22,7 @@ Windows 安装程序（NSIS）。
 
 ![安装完成](apps/desktop/public/3.jpg)
 
-### 飞书协作（可选）
+### 飞书协作
 
 在飞书群里 `@CEO` 发起需求：CEO 派发给产品经理，产品侧弹出关键决策澄清卡（可多选 / 自定义 / 按推荐继续）。
 
@@ -38,17 +38,18 @@ Windows 安装程序（NSIS）。
 
 ## 功能
 
-| 能力 | 说明 |
-|------|------|
-| **工作台** | 三栏布局：话题列表、多智能体会话、右侧工单；可用 `@` 提及角色 |
-| **集成工单** | 对接 Gitee 企业工单；配置本地目录后「交给 CEO」接入话题 |
-| **CEO 派单** | 通过 MCP `agent_os` 的 `dispatch_task` 确定性派给产品 / 开发 / 测试 / 审查 |
+
+| 能力              | 说明                                                         |
+| --------------- | ---------------------------------------------------------- |
+| **工作台**         | 三栏布局：话题列表、多智能体会话、右侧工单；可用 `@` 提及角色                          |
+| **集成工单**        | 对接 Gitee 企业工单；配置本地目录后「交给 CEO」接入话题                          |
+| **CEO 派单**      | 通过 MCP `agent_os` 的 `dispatch_task` 确定性派给产品 / 开发 / 测试 / 审查 |
 | **智能体与 Skills** | 按角色配置引擎（Claude Code / Codex）与本机 Skills（`~/.agents/skills`） |
-| **待确认 (HITL)** | 澄清卡、规格审批、高危操作需人为介入审批 |
-| **飞书协作（可选）** | 群内派单、交互式需求澄清、飞书云文档交付、日志巡检告警与审批闭环 |
-| **任务看板** | 查看任务阶段与推进状态 |
-| **定时调度** | 定时拉单 / 巡检类任务 |
-| **本地 Runtime** | 本机 `127.0.0.1:17890`；安装包内置便携 Node，不必另装 Node 才能开应用 |
+| **待确认 (HITL)**  | 澄清卡、规格审批、高危操作需人为介入审批                                       |
+| **飞书协作（可选）**    | 群内派单、交互式需求澄清、飞书云文档交付、日志巡检告警与审批闭环                           |
+| **任务看板**        | 查看任务阶段与推进状态                                                |
+| **定时调度**        | 定时拉单 / 巡检类任务                                               |
+| **本地 Runtime**  | 本机 `127.0.0.1:17890`；安装包内置便携 Node，不必另装 Node 才能开应用          |
 
 
 
@@ -59,7 +60,7 @@ Windows 安装程序（NSIS）。
 
 ### 仅安装包使用（推荐大多数用户）
 
-1. **Windows x64**，从 [Releases](https://github.com/Liu-PenPen/MLAOS/releases) 下载安装包（不要下 Source code zip）
+1. **Windows x64**，从 [Releases](https://github.com/Liu-PenPen/Agent-OS/releases) 下载安装包（不要下 Source code zip）
 2. 若系统「智能应用控制」拦截未签名程序，需本机放行或临时关闭后再启动
 3. **跑真实智能体**还需要：
   - 本机安装并登录 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)（`claude` 在 PATH），或 Codex CLI
@@ -84,7 +85,7 @@ Windows 安装程序（NSIS）。
 
 安装包通过 GitHub Releases 发布：
 
-1. 打开 [Releases](https://github.com/Liu-PenPen/MLAOS/releases)
+1. 打开 [Releases](https://github.com/Liu-PenPen/Agent-OS/releases)
 2. 下载最新的 `MLAOS_x.y.z_x64-setup.exe`（NSIS；不要下 Source code zip）
 3. 安装后启动应用；内置便携 Node + runtime
 4. **设置 → 集成工单系统** 填写自己的凭证（开发时也可用根目录 `.env`）
@@ -174,4 +175,3 @@ Runtime 将 JSON 落在数据目录：
 
 
 新 Skill 填写 `owner/repo@skill`，保存时安装到 `~/.agents/skills`。未就绪的 Skill 不会参加任务。
-

@@ -2,6 +2,11 @@
 
 多智能体工作台：在本机用话题指挥 CEO / 产品 / 开发 / 测试 / 审查协作，把工单接到会话里派发，澄清确认与进度都在同一个桌面壳里完成。
 
+> ### ⭐ 点点 Star!!!
+>
+> 如果 Agent OS 对你有帮助，请给仓库点一颗 Star，这是对开源最大的鼓励：  
+> **[github.com/Liu-PenPen/Agent-OS](https://github.com/Liu-PenPen/Agent-OS)** ← 点右上角 **Star**
+
 **License:** [MIT](./LICENSE)
 
 本仓库**独立于 agent-os 代码库**（无共享运行时）。桌面端以本机工作台为主；在具备飞书 Skill / 机器人时，也可在飞书群里完成派单、澄清与告警处置。Claude / Codex 使用各自本机 CLI 登录。

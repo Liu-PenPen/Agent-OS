@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ML AOS",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "identifier": "com.miluo.ml-aos",
   "build": {
     "frontendDist": "../dist",

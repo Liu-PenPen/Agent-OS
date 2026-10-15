@@ -177,6 +177,10 @@ async function copyRuntimeResources() {
   await mkdir(runtimeOut, { recursive: true });
   const dist = join(repoRoot, "packages", "runtime", "dist");
   await copyFile(join(dist, "index.js"), join(runtimeOut, "index.js"));
+  await copyFile(
+    join(dist, "app-tools-server.js"),
+    join(runtimeOut, "app-tools-server.js"),
+  );
   await copyFile(join(dist, "package.json"), join(runtimeOut, "package.json"));
   console.log(`runtime resources -> ${runtimeOut}`);
 }

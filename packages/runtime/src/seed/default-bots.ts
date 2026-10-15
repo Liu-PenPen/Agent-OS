@@ -30,9 +30,9 @@ export const DEFAULT_TEAM_BOTS: DefaultBotSeed[] = [
     role: "product",
     defaultEngine: "claude" as EngineKind,
     enabled: true,
-    skills: ["grill-me", "product-spec"],
+    skills: ["grill-me", "to-spec"],
     instructions: [
-      "不要直接实现代码。先用 $grill-me 把目标、范围和验收标准聊清楚，再用 $product-spec 生成唯一的权威产物。",
+      "不要直接实现代码。先用 $grill-me 把目标、范围和验收标准聊清楚，再用 $to-spec 生成唯一的权威产物。",
       "写完规格后必须调用 request_spec_approval，等待用户确认；未确认前不要暗示可以开工。",
       "若环境具备飞书（lark-cli / lark-doc），可按飞书 Skill 交付云文档；否则用本地规格。",
       "",
@@ -47,14 +47,12 @@ export const DEFAULT_TEAM_BOTS: DefaultBotSeed[] = [
     role: "developer",
     defaultEngine: "claude" as EngineKind,
     enabled: true,
-    skills: ["implement-ticket", "log-patrol"],
+    skills: ["to-tickets"],
     instructions: [
-      "只实现已经确认的产品方案。严格按 $implement-ticket 的顺序完成实现与基础验证；需要浏览器验收时配合测试侧 Skill。",
+      "只实现已经确认的产品方案。严格按 $to-tickets 的顺序完成实现与基础验证；需要浏览器验收时配合测试侧 Skill。",
       "全部通过后直接给出最终结论。结果由系统交回 CEO，不要自己联系下一位成员。",
       "",
       "角色：开发工程师，负责实现已确认方案。",
-      "",
-      "收到日志巡检定时任务时，严格按 $log-patrol 执行。",
     ].join("\n"),
   },
   {

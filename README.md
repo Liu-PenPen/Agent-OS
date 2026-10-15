@@ -32,7 +32,7 @@ This repo is **independent of agent-os** — no shared runtime, no Feishu, no co
 安装包通过 GitHub Releases 发布（打 `v*` 标签后自动构建）：
 
 1. 打开 [Releases](https://github.com/Liu-PenPen/MLAOS/releases)
-2. 下载最新的 `ML AOS_x.y.z_x64-setup.exe`（NSIS）
+2. 下载最新的 `MLAOS_x.y.z_x64-setup.exe`（NSIS；不要下 Source code zip）
 3. 安装后启动 **ML AOS**；内置便携 Node + runtime，**不必**再装 Node 才能开应用
 4. 在 **设置 → 集成 / Gitee** 填写自己的凭证（或开发时用 `.env`）
 5. 跑真实智能体仍需本机安装并登录 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 或 Codex CLI

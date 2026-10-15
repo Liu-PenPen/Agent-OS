@@ -74,6 +74,21 @@ function skillsFromBot(bot: BotConfig): string {
   return (bot.skills ?? []).map(skillToken).join(", ");
 }
 
+function skillsPlaceholder(role: string): string {
+  switch (role.trim().toLowerCase()) {
+    case "product":
+      return "例如：grill-me, to-spec";
+    case "developer":
+      return "例如：to-tickets";
+    case "tester":
+      return "例如：agent-browser";
+    case "reviewer":
+      return "例如：code-review-expert";
+    default:
+      return "例如：grill-me, to-spec 或 owner/repo@to-tickets";
+  }
+}
+
 export function BotSettingsPage() {
   const [bots, setBots] = useState<BotConfig[]>([]);
   const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
@@ -308,10 +323,13 @@ export function BotSettingsPage() {
             <input
               value={draft.skills}
               onChange={(e) => setDraft({ ...draft, skills: e.target.value })}
-              placeholder="例如：grill-me, owner/repo@my-skill"
+              placeholder={skillsPlaceholder(draft.role)}
             />
             <span className="field-hint muted">
-              逗号或空格分隔。保存时安装到本机用户技能库
+              逗号或空格分隔。角色默认提示：产品{" "}
+              <code>grill-me, to-spec</code>；开发{" "}
+              <code>to-tickets</code>
+              。保存时安装到本机用户技能库
               <code>~/.agents/skills</code>
               。已安装的同名 Skill 会直接绑定。新 Skill 填写{" "}
               <code>owner/repo@skill</code>

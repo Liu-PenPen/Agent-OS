@@ -1,15 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const require = createRequire(import.meta.url);
-
-function serverInvocation(): { command: string; args: string[] } {
-  const server = fileURLToPath(new URL("./app-tools-server.ts", import.meta.url));
-  const tsxCli = require.resolve("tsx/cli");
-  return { command: process.execPath, args: [tsxCli, server] };
-}
+import {
+  mcpConfigDataDir,
+  resolveMcpServerInvocation,
+} from "./mcp-invocation.js";
 
 /**
  * Codex MCP injection. Pass args as TOML sequence entries — do not JSON.stringify
@@ -18,7 +12,7 @@ function serverInvocation(): { command: string; args: string[] } {
  */
 export function codexAppToolArgs(): string[] {
   try {
-    const invocation = serverInvocation();
+    const invocation = resolveMcpServerInvocation();
     const args: string[] = [
       "-c",
       `mcp_servers.agent_os.command=${JSON.stringify(invocation.command)}`,
@@ -46,8 +40,8 @@ export function codexAppToolArgs(): string[] {
 /** Keep a readable copy of the MCP server path for debugging (optional). */
 export function writeCodexMcpDebugConfig(): string | undefined {
   try {
-    const invocation = serverInvocation();
-    const configDir = join(process.cwd(), "data");
+    const invocation = resolveMcpServerInvocation();
+    const configDir = mcpConfigDataDir();
     mkdirSync(configDir, { recursive: true });
     const configPath = join(configDir, "codex-mcp-agent-os-debug.json");
     writeFileSync(

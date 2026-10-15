@@ -31,19 +31,19 @@ export function AppSettingsPage() {
   const [userId, setUserId] = useState("");
   const [apiBase, setApiBase] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [giteeError, setGiteeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.getSettings(), api.getGiteeIntegration()])
-      .then(([s, integration]) => {
-        if (cancelled) return;
-        setSettings(s);
-        applyGiteeView(integration);
+    api
+      .getSettings()
+      .then((s) => {
+        if (!cancelled) setSettings(s);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setStatus(err instanceof Error ? err.message : "加载失败");
+          setStatus(err instanceof Error ? err.message : "加载设置失败");
           setSettings({
             theme,
             defaultEngine: "claude",
@@ -51,6 +51,23 @@ export function AppSettingsPage() {
             notifications: true,
           });
         }
+      });
+    api
+      .getGiteeIntegration()
+      .then((integration) => {
+        if (cancelled) return;
+        setGiteeError(null);
+        applyGiteeView(integration);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "加载 Gitee 配置失败";
+        setGiteeError(
+          /404|Not Found/i.test(message)
+            ? "Gitee 集成接口不可用（HTTP 404）。安装版请换带新 runtime 的安装包重装；开发版请重启 runtime（pnpm dev:runtime）"
+            : message,
+        );
       });
     return () => {
       cancelled = true;
@@ -112,10 +129,16 @@ export function AppSettingsPage() {
         patch.token = trimmedToken;
       }
       const saved = await api.patchGiteeIntegration(patch);
+      setGiteeError(null);
       applyGiteeView(saved);
       setStatus("Gitee 集成已保存");
     } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : "保存失败");
+      const message = err instanceof Error ? err.message : "保存失败";
+      setStatus(
+        /404|Not Found/i.test(message)
+          ? "保存失败：集成接口 404。安装版请换新安装包重装；开发版请重启 runtime（pnpm dev:runtime）"
+          : message,
+      );
     } finally {
       setBusy(false);
     }
@@ -232,18 +255,14 @@ export function AppSettingsPage() {
       </section>
 
       <section className="panel-form">
-        <h2 className="section-title">集成 / Gitee</h2>
+        <h2 className="section-title">集成工单</h2>
         <p className="field-hint">
-          工单拉取与定时调度需要企业 Token。在 Gitee 企业版创建私人令牌后填入下方；也可在仓库根目录的
-          <code> .env </code>
-          配置（开发用，勿提交）。环境变量优先于本页存档。
+          如何获取：当前仅支持 Gitee 工单系统 → 打开 Gitee 企业版 → 私人令牌 /
+          Access Token，复制 token；企业 ID 与用户 ID 可在企业设置或 API
+          文档中查看。
         </p>
-        <p className="field-hint">
-          如何获取：打开 Gitee 企业版 → 私人令牌 / Access Token，复制 token；企业 ID
-          与用户 ID 可在企业设置或 API 文档中查看。推荐环境变量名：
-          <code>ML_AOS_GITEE_TOKEN</code>、<code>ML_AOS_GITEE_ENTERPRISE_ID</code>、
-          <code>ML_AOS_GITEE_USER_ID</code>。
-        </p>
+
+        {giteeError ? <p className="form-error">{giteeError}</p> : null}
 
         {gitee?.envOverridesActive ? (
           <p className="form-status">
@@ -328,13 +347,19 @@ export function AppSettingsPage() {
             保存 Gitee 配置
           </button>
         </div>
+        {status ? <p className="form-status">{status}</p> : null}
 
         <h3 className="section-title" style={{ marginTop: 8 }}>
           项目绑定
         </h3>
         <p className="field-hint">
           登录后项目列表优先从 Gitee 拉取。本地工作目录与参与 Bot 在工作台工单面板配置。可选白名单文件：
-          <code className="mono"> {gitee?.projectsConfigPath ?? "（加载中）"} </code>
+          <code className="mono">
+            {" "}
+            {giteeError
+              ? "（接口未就绪）"
+              : (gitee?.projectsConfigPath ?? "（加载中）")}{" "}
+          </code>
           {gitee?.projectsConfigViaEnv
             ? "（由环境变量 GITEE_PROJECTS_CONFIG / ML_AOS_GITEE_PROJECTS_CONFIG 覆盖）"
             : "（默认位于数据目录；仓库内仅保留 example）"}

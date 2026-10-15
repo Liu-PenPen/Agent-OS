@@ -9,6 +9,16 @@
 
 **持续更新：** 项目会持续维护与完善——修问题、打磨体验，并继续增加新功能（例如 macOS 安装包、更多通道与能力）。欢迎 Star / Issue / PR 一起推动。
 
+### 技术沟通 · 加 V
+
+使用中有问题、想交流落地经验，或有功能建议，欢迎加微信沟通（微信扫码）：
+
+<p align="center">
+  <img src="apps/desktop/public/qr.jpg" alt="技术沟通加微信二维码" width="280" />
+</p>
+
+<p align="center"><b>小花花</b> · 扫码添加好友</p>
+
 **License:** [MIT](./LICENSE)
 
 本仓库**独立于 agent-os 代码库**（无共享运行时）。桌面端以本机工作台为主；在具备飞书 Skill / 机器人时，也可在飞书群里完成派单、澄清与告警处置。Claude / Codex 使用各自本机 CLI 登录。当前正式安装包以 **Windows** 为主；Mac 可先用本机 Web 开发方式运行，桌面安装包后续会完善。

@@ -175,7 +175,16 @@ Runtime 将 JSON 落在数据目录：
 
 新 Skill 填写 `owner/repo@skill`，保存时安装到 `~/.agents/skills`。未就绪的 Skill 不会参加任务。
 
-## 技术沟通 
+## 下载桌面应用
+
+当前提供 **Windows x64** 安装包（NSIS）：
+
+- **最新版本下载：** [MLAOS_0.1.2_x64-setup.exe](https://github.com/Liu-PenPen/Agent-OS/releases/download/v0.1.2/MLAOS_0.1.2_x64-setup.exe)
+- **全部 Releases：** [github.com/Liu-PenPen/Agent-OS/releases](https://github.com/Liu-PenPen/Agent-OS/releases)
+
+请下载安装包文件，不要下 Source code zip。覆盖安装前请先退出正在运行的 Agent OS。
+
+## 技术沟通
 
 使用中有问题、想交流落地经验，或有功能建议，欢迎加微信沟通（微信扫码）：
 
